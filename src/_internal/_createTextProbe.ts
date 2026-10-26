@@ -118,21 +118,29 @@ export default function _createTextProbe(
   probe.setAttribute('aria-hidden', 'true');
   (doc.body ?? doc.documentElement).appendChild(probe);
 
-  // 1行の高さは、計算した line-height ではなく実際に描画して測る（normal の場合も測れるように）
-  probe.textContent = 'M';
-  const lineHeight = probe.getBoundingClientRect().height || 1;
-
   /**
-   * range の矩形が何行にまたがっているか
+   * 描画した矩形が何行にまたがっているか
+   *
+   * 縦に重なる矩形を同じ行とみなす。高さで割って数えると、line-height が normal のときに、
+   * 代わりのフォント（日本語や絵文字など）で行が高くなった分を余分に数えてしまうため。
+   * 同じ行の矩形は、フォントが違って上端がずれても縦には重なる
    */
-  const countRangeLines = (rects: DOMRectList) => {
-    const tops = new Set<number>();
-    for (const rect of rects) {
-      if (rect.width > 0) {
-        tops.add(Math.round(rect.top));
+  const countLines = (rects: DOMRectList) => {
+    const sorted = Array.from(rects)
+      .filter((rect) => rect.height > 0)
+      .sort((a, b) => a.top - b.top);
+    let lines = 0;
+    let lineBottom = -Infinity;
+    for (const rect of sorted) {
+      // 1px 未満の重なりは、小数の丸めの違いとして別の行とみなす
+      if (rect.top >= lineBottom - 1) {
+        lines++;
+        lineBottom = rect.bottom;
+      } else {
+        lineBottom = Math.max(lineBottom, rect.bottom);
       }
     }
-    return tops.size;
+    return lines;
   };
 
   const measure = (
@@ -142,27 +150,30 @@ export default function _createTextProbe(
     probe.textContent = text;
     const rect = probe.getBoundingClientRect();
     let right = 0;
+    let lines = 0;
     let rangeLines = 0;
     const node = probe.firstChild;
     if (node) {
       // 要素の大きさだけでは行末の横のはみ出しが分からないため、描画した矩形を調べる
       const all = doc.createRange();
       all.selectNodeContents(probe);
-      for (const part of all.getClientRects()) {
+      const rects = all.getClientRects();
+      for (const part of rects) {
         right = Math.max(right, part.right - rect.left);
       }
+      lines = Math.max(countLines(rects), 1);
       if (range) {
         const target = doc.createRange();
         target.setStart(node, range[0]);
         target.setEnd(node, range[1]);
-        rangeLines = countRangeLines(target.getClientRects());
+        rangeLines = countLines(target.getClientRects());
       }
     }
     return {
       right,
       scrollWidth: probe.scrollWidth,
       height: rect.height,
-      lines: text ? Math.max(Math.round(rect.height / lineHeight), 1) : 0,
+      lines,
       rangeLines,
     };
   };

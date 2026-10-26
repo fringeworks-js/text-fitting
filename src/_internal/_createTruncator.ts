@@ -29,6 +29,14 @@ export type Truncator = {
    * @param maxChars 書記素の数の上限。NaN は上限なし、負の値は 0、小数は切り捨てて扱う
    */
   split(maxChars: number): TruncatedParts | undefined;
+
+  /**
+   * 省略記号を除いて残す書記素の数を指定して切る\
+   * 記号を含めた数は元の文字列より多くなることがある（DOM の計測では、幅に収まるなら長くてもよいため）
+   * @param kept 残す書記素の数（記号を除く）。範囲外は 0〜元の数に収め、小数は切り捨てる
+   * @param withMarker 省略記号を付けるか
+   */
+  cut(kept: number, withMarker: boolean): TruncatedParts;
 };
 
 /**
@@ -136,17 +144,9 @@ export default function _createTruncator(
     return count;
   };
 
-  const split = (maxChars: number): TruncatedParts | undefined => {
-    if (Number.isNaN(maxChars)) {
-      return undefined;
-    }
-    const limit = Math.max(Math.floor(maxChars), 0);
-    if (count <= limit) {
-      return undefined;
-    }
-    // 記号だけでも上限を超える場合は、記号を付けずに切る
-    const marker = ellipsisCount <= limit ? ellipsis : '';
-    const budget = limit - (marker ? ellipsisCount : 0);
+  const cut = (kept: number, withMarker: boolean): TruncatedParts => {
+    const marker = withMarker ? ellipsis : '';
+    const budget = Math.min(Math.max(Math.floor(kept), 0), count);
 
     switch (truncatePosition) {
       case 'start': {
@@ -176,10 +176,24 @@ export default function _createTruncator(
     }
   };
 
+  const split = (maxChars: number): TruncatedParts | undefined => {
+    if (Number.isNaN(maxChars)) {
+      return undefined;
+    }
+    const limit = Math.max(Math.floor(maxChars), 0);
+    if (count <= limit) {
+      return undefined;
+    }
+    // 記号だけでも上限を超える場合は、記号を付けずに切る
+    return ellipsisCount <= limit
+      ? cut(limit - ellipsisCount, true)
+      : cut(limit, false);
+  };
+
   const truncate = (maxChars: number) => {
     const parts = split(maxChars);
     return parts ? parts.before + parts.marker + parts.after : text;
   };
 
-  return { count, ellipsisCount, truncate, split };
+  return { count, ellipsisCount, truncate, split, cut };
 }

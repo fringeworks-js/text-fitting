@@ -187,6 +187,39 @@ describe('createTruncateTextController', () => {
       expect(host.getBoundingClientRect().height).toBeLessThanOrEqual(40.5);
     });
 
+    it('line-height: normal の日本語でも maxLines の行数まで使う', () => {
+      const text =
+        '吾輩は猫である。名前はまだ無い。どこで生れたかとんと見当がつかぬ。何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。';
+      const host = createHost({ width: '240px', lineHeight: 'normal' });
+      const controller = createTruncateTextController(text, {
+        wrap: 'normal',
+        maxLines: 2,
+        ellipsis: '…',
+      });
+      bind(controller, host);
+      const { displayText } = controller.getSnapshot();
+      const twoLines = host.getBoundingClientRect().height;
+      host.textContent = '吾';
+      const oneLine = host.getBoundingClientRect().height;
+      // 2行目まで使っている
+      expect(twoLines).toBeGreaterThan(oneLine * 1.5);
+      // あと1文字増やすと3行になる
+      host.textContent = truncateText(text, {
+        maxChars: countGraphemes(displayText) + 1,
+        ellipsis: '…',
+      });
+      expect(host.getBoundingClientRect().height).toBeGreaterThan(twoLines + 1);
+    });
+
+    it('空の行も1行に数える', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController('a\n\n\nb', {
+        maxLines: 2,
+      });
+      bind(controller, host);
+      expect(controller.getSnapshot().displayText).toBe('a\n...');
+    });
+
     it('CSS で決めた高さに収める', () => {
       const host = createHost({ width: '150px', height: '60px' });
       const controller = createTruncateTextController(LONG_TEXT, {

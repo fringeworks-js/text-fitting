@@ -1,0 +1,8 @@
+{
+  "extends": "@fringeworks/dev/tsconfig.base.json",
+  "compilerOptions": {
+    // Intl.Segmenter（Firefox 125 以降）は簡易な分割への切り替え付きで使うため、型だけを追加する
+    "lib": ["ES2021", "ES2022.Intl", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src", "globals.d.ts"]
+}

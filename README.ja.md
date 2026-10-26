@@ -4,7 +4,7 @@
 
 **[English README is available here](./README.md)**
 
-現在のバージョンでは、省略する機能を提供しています。
+現在のバージョンでは、省略する機能と、文字の大きさを変える機能を提供しています。
 
 ## インストール
 
@@ -40,10 +40,11 @@ import truncateText from '@fringeworks/text-fitting/truncateText';
 
 ## API
 
-| 関数                                           | 説明                                                                                         |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `truncateText(text, options)`                  | 書記素の数が上限以下になるように、文字列を省略する。DOM を参照しない                         |
-| `createTruncateTextController(text, options?)` | 要素の大きさ（幅・高さ）と行数に収まるように、文字列を省略する Controller を作る。DOM が要る |
+| 関数                                           | 説明                                                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `truncateText(text, options)`                  | 書記素の数が上限以下になるように、文字列を省略する。DOM を参照しない                             |
+| `createTruncateTextController(text, options?)` | 要素の大きさ（幅・高さ）と行数に収まるように、文字列を省略する Controller を作る。DOM が要る     |
+| `createResizeTextController(text, options?)`   | 要素の大きさ（幅・高さ）と行数に収まるように、文字の大きさを変える Controller を作る。DOM が要る |
 
 ### `truncateText`
 
@@ -155,6 +156,64 @@ controller.update(text, { wrap: 'normal', maxLines: 3, disabled: expanded });
 // ボタンは expanded || isTruncated のときに出す
 ```
 
+### `createResizeTextController`
+
+```ts
+createResizeTextController(text: string, options?: ResizeTextControllerOptions): ResizeTextController
+```
+
+要素の大きさ（幅・高さ）と行数に収まるように、文字の大きさ（font-size）を変える Controller を作ります。`minFontSize`〜`maxFontSize` の範囲で、収まる最大の大きさを、実際に描画して測って選びます。
+
+- `maxFontSize` を省略した場合の上限は、要素の CSS の font-size です。そのままで収まれば何もせず、はみ出すときだけ縮めます
+- `maxFontSize` を指定すると、収まる限りその大きさまで大きくします（ダッシュボードの数値を枠いっぱいに表示する、など）
+- 下限でも収まらない場合は下限の大きさにし、`isOverflowing` で知らせます。はみ出しは CSS に任せます
+- 使い方は `createTruncateTextController` と同じです。snapshot の `style` には、選んだ `fontSize` が入ります
+
+```ts
+const controller = createResizeTextController('1,234,567', {
+  maxFontSize: 64,
+});
+const render = () => {
+  const { displayText, style } = controller.getSnapshot();
+  Object.assign(element.style, style);
+  element.textContent = displayText;
+};
+controller.subscribe(render);
+render();
+controller.attach(element);
+```
+
+| オプション     | 型         | 説明                                                                                                                                                                                      |
+| -------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?` | `number`   | font-size の下限（px）。省略した場合は下限を設けない（実際にはブラウザーの最小のフォントサイズで止まる）。長い文字列では、読める大きさを保つために指定する。`0` 以下と `NaN` は省略と同じ |
+| `maxFontSize?` | `number`   | font-size の上限（px）。省略した場合は要素の CSS の font-size。`Infinity` を指定すると、収まる限りどこまでも大きくする。`0` 以下と `NaN` は省略と同じ                                     |
+| `wrap?`        | `TextWrap` | `createTruncateTextController` と同じ                                                                                                                                                     |
+| `maxLines?`    | `number`   | `createTruncateTextController` と同じ                                                                                                                                                     |
+| `disabled?`    | `boolean`  | 動作を止める。止めている間は計測せず、font-size を指定しない（CSS の大きさのまま）。デフォルトは `false`                                                                                  |
+
+`minFontSize` が上限（`maxFontSize`、省略した場合は CSS の font-size）より大きい場合は、`minFontSize` の大きさに固定します。下限は読める大きさを保つためのものなので、上限より優先します。
+
+#### `ResizeTextController`
+
+メソッドは `TruncateTextController` と同じです（`attach`・`getSnapshot`・`subscribe`・`update`・`refresh`・`destroy`）。
+
+`ResizeTextSnapshot` のプロパティ:
+
+| プロパティ      | 型                | 説明                                                                            |
+| --------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `displayText`   | `string`          | 表示する文字列（元の文字列のまま）                                              |
+| `fontSize`      | `number \| null`  | 選んだ font-size（px）。未計測の間と、止めている間は `null`                     |
+| `isOverflowing` | `boolean \| null` | 下限の大きさでも収まらないか。未計測の間と、止めている間は `null`               |
+| `style`         | `ResizeTextStyle` | 表示する要素に当てるスタイル（`whiteSpace`、`overflowWrap`、選んだ `fontSize`） |
+
+#### 文字の大きさを変えるときの注意
+
+- 要素の CSS の font-size は、クラスなどの CSS で指定してください。Controller の `style` を当てると、要素のインラインの `font-size` は上書きされます
+- 要素の高さは、CSS かレイアウト（`height`・`max-height`・flex・grid など）で決まっている場合だけ制約にします。高さが中身に合わせて伸びる要素では、幅と行数だけで大きさを決めます（そのため、縮めた後に幅が広がれば、また大きくなります）
+- CSS の font-size と、高さが決まっているかを読み取るときに、要素の font-size を一時的に変えて、すぐに元に戻します（画面には表示されません）
+- `line-height` は、単位なし・`em`・`%` なら文字の大きさに比例し、`px` なら固定のまま測ります。`letter-spacing` などを `em` で指定している場合は、文字の大きさに比例しないものとして測ります
+- 利用者がブラウザーの設定で最小のフォントサイズを指定している場合、それより小さくはなりません。その場合は収まらないと判定し、`isOverflowing` で知らせます（利用者の読みやすさのための設定を尊重するため、`transform` で縮めることはしません）
+
 ### `Intl.Segmenter` について
 
 書記素と単語は `Intl.Segmenter` で分けます。`Intl.Segmenter` が無い環境（Firefox 125 未満）では、簡易な規則で分けます。
@@ -176,6 +235,10 @@ controller.update(text, { wrap: 'normal', maxLines: 3, disabled: expanded });
 | `TruncateTextControllerOptions` | `createTruncateTextController` のオプション                          |
 | `TruncateTextController`        | `createTruncateTextController` が返す Controller                     |
 | `TruncateTextSnapshot`          | `TruncateTextController` の結果                                      |
+| `ResizeTextControllerOptions`   | `createResizeTextController` のオプション                            |
+| `ResizeTextController`          | `createResizeTextController` が返す Controller                       |
+| `ResizeTextSnapshot`            | `ResizeTextController` の結果                                        |
+| `ResizeTextStyle`               | `ResizeTextController` が返す、表示する要素に当てるスタイル          |
 | `TruncateOptions`               | 省略の機能で共通のオプション                                         |
 | `TextLayoutOptions`             | 要素に収める機能で共通のオプション（`wrap`・`maxLines`・`disabled`） |
 | `TruncatePosition`              | 省略する位置（`'end' \| 'start' \| 'middle'`）                       |

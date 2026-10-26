@@ -1,6 +1,6 @@
 {
   "name": "@fringeworks/text-fitting",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "A library some will find handy, for fitting text into an element by truncating it, resizing it, or choosing among candidates.",
   "keywords": [
@@ -32,7 +32,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "release": "pnpm build && npm publish ./dist",
-    "test": "vitest",
+    "test": "vitest --project unit --project browser",
+    "test:browsers": "vitest run --project unit --project all-browsers",
     "tidy": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\" --config ./prettier.tidy.config.ts"
   },
   "devDependencies": {

@@ -8,6 +8,8 @@ import _createTruncator, {
   type TruncatedParts,
   type Truncator,
 } from '../_internal/_createTruncator';
+import _isFitting from '../_internal/_isFitting';
+import _isShallowEqual from '../_internal/_isShallowEqual';
 import _toLimit from '../_internal/_toLimit';
 import type { TextFittingStyle } from '../types';
 import type {
@@ -15,11 +17,6 @@ import type {
   TruncateTextControllerOptions,
   TruncateTextSnapshot,
 } from './types';
-
-/**
- * 収まるかの判定で許す誤差（px）。小数の丸めの違いで収まらないと判定しないようにする
- */
-const TOLERANCE = 0.5;
 
 /**
  * 候補を長い順にすべて測る、書記素の数の上限\
@@ -110,10 +107,7 @@ function _selectText(
 ): Pick<TruncateTextSnapshot, 'displayText' | 'isTruncated'> {
   const maxChars = _toLimit(options.maxChars);
   const maxLines = _toLimit(options.maxLines);
-  // 折り返すとき（pre-wrap）は、行末の空白が枠の外にぶら下がって描画される。
-  // 描画した矩形の右端で判定すると、ぶら下がった空白まで「はみ出し」とみなしてしまうため、
-  // 矩形の右端は折り返さないときだけ使う（折り返すときの横のはみ出しは、区切りの無い長い単語だけで、scrollWidth で分かる）
-  const checksRight = style.whiteSpace === 'pre';
+  const limits = { width: size.width, height: size.height, maxLines, style };
   const probe = _createTextProbe(element, size.width, style);
 
   /**
@@ -124,13 +118,7 @@ function _selectText(
       ? [parts.before.length, parts.before.length + parts.marker.length]
       : undefined;
     const metrics = probe.measure(value, range);
-    return (
-      (!checksRight || metrics.right <= size.width + TOLERANCE) &&
-      metrics.scrollWidth <= size.width + TOLERANCE &&
-      metrics.height <= size.height + TOLERANCE &&
-      metrics.lines <= maxLines &&
-      (!range || metrics.rangeLines <= 1)
-    );
+    return _isFitting(metrics, limits) && (!range || metrics.rangeLines <= 1);
   };
 
   /**
@@ -206,19 +194,5 @@ function _isEqualSnapshot(
     a.displayText === b.displayText &&
     a.isTruncated === b.isTruncated &&
     a.style === b.style
-  );
-}
-
-/**
- * 2つのオプションが、プロパティの値の単位で等しいか
- */
-function _isShallowEqual(
-  a: TruncateTextControllerOptions,
-  b: TruncateTextControllerOptions,
-): boolean {
-  const keys = Object.keys(a) as (keyof TruncateTextControllerOptions)[];
-  return (
-    keys.length === Object.keys(b).length &&
-    keys.every((key) => Object.is(a[key], b[key]))
   );
 }

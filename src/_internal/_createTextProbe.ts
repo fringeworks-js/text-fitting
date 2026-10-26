@@ -68,6 +68,12 @@ export type TextProbe = {
   measure(text: string, range?: [start: number, end: number]): TextProbeMetrics;
 
   /**
+   * 計測用の要素のスタイルを変える（文字の大きさを変えて測るときなど）
+   * @param style スタイル
+   */
+  setStyle(style: Readonly<Record<string, string>>): void;
+
+  /**
    * 計測用の要素を DOM から取り除く
    */
   remove(): void;
@@ -178,9 +184,13 @@ export default function _createTextProbe(
     };
   };
 
+  const setStyle = (next: Readonly<Record<string, string>>) => {
+    Object.assign(probe.style, next);
+  };
+
   const remove = () => {
     probe.remove();
   };
 
-  return { measure, remove };
+  return { measure, setStyle, remove };
 }

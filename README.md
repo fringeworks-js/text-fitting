@@ -4,7 +4,7 @@
 
 **[日本語のREADMEはこちら](./README.ja.md)**
 
-The current version provides truncation.
+The current version provides truncation and resizing.
 
 ## Installation
 
@@ -40,10 +40,11 @@ The library does not interpret the content of the string. If you want to normali
 
 ## API
 
-| Function                                       | Description                                                                                                          |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `truncateText(text, options)`                  | Truncates a string so that its number of graphemes stays within a limit. Does not use the DOM                        |
-| `createTruncateTextController(text, options?)` | Creates a controller that truncates a string to fit an element's size (width and height) and lines. Requires the DOM |
+| Function                                       | Description                                                                                                             |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `truncateText(text, options)`                  | Truncates a string so that its number of graphemes stays within a limit. Does not use the DOM                           |
+| `createTruncateTextController(text, options?)` | Creates a controller that truncates a string to fit an element's size (width and height) and lines. Requires the DOM    |
+| `createResizeTextController(text, options?)`   | Creates a controller that changes the font size to fit an element's size (width and height) and lines. Requires the DOM |
 
 ### `truncateText`
 
@@ -155,6 +156,64 @@ controller.update(text, { wrap: 'normal', maxLines: 3, disabled: expanded });
 // Show the button when expanded || isTruncated
 ```
 
+### `createResizeTextController`
+
+```ts
+createResizeTextController(text: string, options?: ResizeTextControllerOptions): ResizeTextController
+```
+
+Creates a controller that changes the font size so that the text fits the element's size (width and height) and number of lines. It selects the largest size within `minFontSize` to `maxFontSize` that fits, by actually rendering and measuring.
+
+- If `maxFontSize` is omitted, the upper limit is the element's CSS font size. If the text already fits, nothing changes; it only shrinks when the text overflows
+- If `maxFontSize` is specified, the text is enlarged up to that size as long as it fits (for example, to fill a dashboard tile with a number)
+- If the text does not fit even at the lower limit, the lower limit is used and `isOverflowing` reports it. The overflow is left to CSS
+- Usage is the same as `createTruncateTextController`. The snapshot's `style` contains the selected `fontSize`
+
+```ts
+const controller = createResizeTextController('1,234,567', {
+  maxFontSize: 64,
+});
+const render = () => {
+  const { displayText, style } = controller.getSnapshot();
+  Object.assign(element.style, style);
+  element.textContent = displayText;
+};
+controller.subscribe(render);
+render();
+controller.attach(element);
+```
+
+| Option         | Type       | Description                                                                                                                                                                                                               |
+| -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?` | `number`   | Lower limit of the font size (px). If omitted, there is no lower limit (in practice, the browser's minimum font size applies). Specify it for long text to keep it readable. `0` or less and `NaN` are treated as omitted |
+| `maxFontSize?` | `number`   | Upper limit of the font size (px). If omitted, the element's CSS font size. `Infinity` enlarges the text as much as it fits. `0` or less and `NaN` are treated as omitted                                                 |
+| `wrap?`        | `TextWrap` | Same as `createTruncateTextController`                                                                                                                                                                                    |
+| `maxLines?`    | `number`   | Same as `createTruncateTextController`                                                                                                                                                                                    |
+| `disabled?`    | `boolean`  | Stops the controller. While stopped, it does not measure and does not set a font size (the CSS size is used). Defaults to `false`                                                                                         |
+
+If `minFontSize` is larger than the upper limit (`maxFontSize`, or the CSS font size if omitted), the font size is fixed at `minFontSize`. The lower limit exists to keep the text readable, so it takes precedence over the upper limit.
+
+#### `ResizeTextController`
+
+The methods are the same as `TruncateTextController` (`attach`, `getSnapshot`, `subscribe`, `update`, `refresh`, `destroy`).
+
+Properties of `ResizeTextSnapshot`:
+
+| Property        | Type              | Description                                                                                            |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `displayText`   | `string`          | The text to display (the original string as is)                                                        |
+| `fontSize`      | `number \| null`  | The selected font size (px). `null` while not yet measured and while stopped                           |
+| `isOverflowing` | `boolean \| null` | Whether the text does not fit even at the lower limit. `null` while not yet measured and while stopped |
+| `style`         | `ResizeTextStyle` | The style to apply to the element (`whiteSpace`, `overflowWrap`, and the selected `fontSize`)          |
+
+#### Notes on changing the font size
+
+- Specify the element's CSS font size with CSS such as a class. Applying the controller's `style` overrides the element's inline `font-size`
+- The element's height is used as a constraint only when it is determined by CSS or layout (`height`, `max-height`, flex, grid, and so on). For an element whose height grows with its content, the size is determined by the width and lines only (so after shrinking, it grows again when the width gets wider)
+- To read the CSS font size and whether the height is fixed, the controller temporarily changes the element's font size and restores it immediately (it is never painted)
+- A unitless, `em`, or `%` `line-height` is measured as scaling with the font size, and a `px` value as fixed. `letter-spacing` and similar properties specified in `em` are measured as not scaling
+- If the user has set a minimum font size in the browser settings, the text never gets smaller than that. In that case it is judged not to fit and reported with `isOverflowing` (the controller does not shrink it with `transform`, to respect the user's readability setting)
+
 ### About `Intl.Segmenter`
 
 Graphemes and words are split with `Intl.Segmenter`. In environments without `Intl.Segmenter` (Firefox before 125), simple rules are used instead.
@@ -176,6 +235,10 @@ Truncating icon fonts drawn with ligatures (such as `home` in Material Icons) br
 | `TruncateTextControllerOptions` | Options of `createTruncateTextController`                               |
 | `TruncateTextController`        | The controller returned by `createTruncateTextController`               |
 | `TruncateTextSnapshot`          | The result of `TruncateTextController`                                  |
+| `ResizeTextControllerOptions`   | Options of `createResizeTextController`                                 |
+| `ResizeTextController`          | The controller returned by `createResizeTextController`                 |
+| `ResizeTextSnapshot`            | The result of `ResizeTextController`                                    |
+| `ResizeTextStyle`               | The style returned by `ResizeTextController` to apply to the element    |
 | `TruncateOptions`               | Options shared by the truncation features                               |
 | `TextLayoutOptions`             | Options shared by the fitting features (`wrap`, `maxLines`, `disabled`) |
 | `TruncatePosition`              | Where to truncate (`'end' \| 'start' \| 'middle'`)                      |

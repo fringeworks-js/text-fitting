@@ -7,6 +7,9 @@ import _createTextStyle from '../_internal/_createTextStyle';
 import _isFitting from '../_internal/_isFitting';
 import _isShallowEqual from '../_internal/_isShallowEqual';
 import _readBaseTypography from '../_internal/_readBaseTypography';
+import _searchFontSize, {
+  _resolveFontSizeRange,
+} from '../_internal/_searchFontSize';
 import _toLimit from '../_internal/_toLimit';
 import type { TextFittingStyle } from '../types';
 import type {
@@ -14,21 +17,6 @@ import type {
   ResizeTextControllerOptions,
   ResizeTextSnapshot,
 } from './types';
-
-/**
- * 下限を指定しないときの font-size の下限（px）
- */
-const DEFAULT_MIN_FONT_SIZE = 1;
-
-/**
- * 上限が Infinity のときに、大きくしていく font-size の上限（px）
- */
-const MAX_SEARCH_FONT_SIZE = 10000;
-
-/**
- * font-size を探すときの細かさ（px）
- */
-const PRECISION = 0.1;
 
 /**
  * 要素の大きさ（幅・高さ）と行数に収まるように、文字の大きさ（font-size）を変える Controller を作る\
@@ -111,13 +99,6 @@ export default function createResizeTextController(
 }
 
 /**
- * font-size のオプションを数値にする。NaN・0 以下は指定しなかったものとして扱う
- */
-function _toFontSize(value: number | undefined): number | undefined {
-  return value !== undefined && value > 0 ? value : undefined;
-}
-
-/**
  * 要素に収まる最大の font-size を、計測して選ぶ
  */
 function _selectFontSize(
@@ -140,65 +121,19 @@ function _selectFontSize(
     ...style,
     lineHeight: base.lineHeight,
   });
-
   const fitsAt = (fontSize: number) => {
     probe.setStyle({ fontSize: `${fontSize}px` });
     return _isFitting(probe.measure(text), limits);
   };
 
   try {
-    const min = _toFontSize(options.minFontSize) ?? DEFAULT_MIN_FONT_SIZE;
-    let max = _toFontSize(options.maxFontSize) ?? base.fontSize;
-
-    // 下限が上限以上なら、下限に固定する（下限を優先する）
-    if (min >= max) {
-      return { fontSize: min, isOverflowing: !fitsAt(min) };
-    }
-
-    // 上限が Infinity のときは、収まらなくなるまで2倍にしていき、探す範囲を決める
-    let low = min;
-    if (!Number.isFinite(max)) {
-      let current = Math.max(base.fontSize, min);
-      if (fitsAt(current)) {
-        while (current < MAX_SEARCH_FONT_SIZE && fitsAt(current * 2)) {
-          current *= 2;
-        }
-        low = current;
-        max = Math.min(current * 2, MAX_SEARCH_FONT_SIZE);
-      } else {
-        max = current;
-      }
-    }
-
-    if (fitsAt(max)) {
-      return { fontSize: _round(max), isOverflowing: false };
-    }
-    if (low === min && !fitsAt(min)) {
-      return { fontSize: min, isOverflowing: true };
-    }
-
-    // low は収まり、high は収まらない
-    let high = max;
-    while (high - low > PRECISION) {
-      const middle = (low + high) / 2;
-      if (fitsAt(middle)) {
-        low = middle;
-      } else {
-        high = middle;
-      }
-    }
-    return { fontSize: _round(low), isOverflowing: false };
+    const { min, max } = _resolveFontSizeRange(options, base.fontSize);
+    const { fontSize, fits } = _searchFontSize(fitsAt, min, max, base.fontSize);
+    return { fontSize, isOverflowing: !fits };
   } finally {
     // 計測が途中で失敗しても、計測用の要素を残さない
     probe.remove();
   }
-}
-
-/**
- * font-size を小数第2位で切り捨てる（収まる側に倒す）
- */
-function _round(value: number): number {
-  return Math.floor(value * 100) / 100;
 }
 
 /**

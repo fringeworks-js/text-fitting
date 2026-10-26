@@ -345,6 +345,33 @@ describe('createTruncateTextController', () => {
         isTruncated: false,
       });
     });
+
+    it('文字列が長くなっても、最初の高さに収め続けない', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController('Hello', {
+        wrap: 'normal',
+      });
+      bind(controller, host);
+      controller.update(LONG_TEXT, { wrap: 'normal' });
+      expect(controller.getSnapshot()).toMatchObject({
+        displayText: LONG_TEXT,
+        isTruncated: false,
+      });
+    });
+
+    it('幅が狭くなっても、最初の高さに収め続けない', async () => {
+      const host = createHost({ width: '300px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        wrap: 'normal',
+      });
+      bind(controller, host);
+      host.style.width = '100px';
+      await nextFrames();
+      expect(controller.getSnapshot()).toMatchObject({
+        displayText: LONG_TEXT,
+        isTruncated: false,
+      });
+    });
   });
 
   describe('maxChars', () => {

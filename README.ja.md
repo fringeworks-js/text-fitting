@@ -4,8 +4,6 @@
 
 **[English README is available here](./README.md)**
 
-現在のバージョンでは、省略する機能と、文字の大きさを変える機能を提供しています。
-
 ## インストール
 
 ```bash
@@ -40,11 +38,13 @@ import truncateText from '@fringeworks/text-fitting/truncateText';
 
 ## API
 
-| 関数                                           | 説明                                                                                             |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `truncateText(text, options)`                  | 書記素の数が上限以下になるように、文字列を省略する。DOM を参照しない                             |
-| `createTruncateTextController(text, options?)` | 要素の大きさ（幅・高さ）と行数に収まるように、文字列を省略する Controller を作る。DOM が要る     |
-| `createResizeTextController(text, options?)`   | 要素の大きさ（幅・高さ）と行数に収まるように、文字の大きさを変える Controller を作る。DOM が要る |
+| 関数                                               | 説明                                                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `truncateText(text, options)`                      | 書記素の数が上限以下になるように、文字列を省略する。DOM を参照しない                                               |
+| `createTruncateTextController(text, options?)`     | 要素の大きさ（幅・高さ）と行数に収まるように、文字列を省略する Controller を作る。DOM が要る                       |
+| `createResizeTextController(text, options?)`       | 要素の大きさ（幅・高さ）と行数に収まるように、文字の大きさを変える Controller を作る。DOM が要る                   |
+| `createChooseTextController(candidates, options?)` | 要素の大きさ（幅・高さ）と行数に収まる表現を、候補から選ぶ Controller を作る。DOM が要る                           |
+| `createFitTextController(text, options?)`          | 候補を選ぶ・文字の大きさを変える・省略するを組み合わせて、要素の大きさと行数に収める Controller を作る。DOM が要る |
 
 ### `truncateText`
 
@@ -147,7 +147,8 @@ controller.attach(element);
 #### 要素の大きさについて
 
 - 要素の幅は、レイアウトで決まっている必要があります（ブロック要素、flex や grid の子要素など）。中身に合わせて幅が変わるインライン要素では、省略されません
-- 折り返すとき（`wrap` が `'normal'` か `'anywhere'`）は、要素の高さを CSS（`height`・`max-height`）かレイアウト（flex・grid など）で決めるか、`maxLines` を指定してください。高さが中身に合わせて伸びる要素で `maxLines` も無い場合は、最初は全文を表示しますが、その後に文字列が長くなったり幅が狭くなったりしても、最初の高さに収めるように省略し続けます
+- 要素の高さは、CSS（`height`・`max-height`）かレイアウト（flex・grid など）で決まっている場合だけ制約にします。高さが中身に合わせて伸びる要素では、幅と `maxLines` だけで判定します。そのため、折り返すとき（`wrap` が `'normal'` か `'anywhere'`）に高さが中身に合わせて伸びる要素で `maxLines` も無い場合は、省略しません（要素が伸びて全文を表示します）
+- 高さが決まっているかは、要素の font-size と line-height を一時的に変えて確かめます（すぐに元に戻すので、画面には表示されません）
 - `disabled` で止めている間は、要素の高さを CSS で決めていると、全文がはみ出すことがあります。全文を表示するときは、高さの指定も外してください
 
 ```ts
@@ -209,10 +210,109 @@ controller.attach(element);
 #### 文字の大きさを変えるときの注意
 
 - 要素の CSS の font-size は、クラスなどの CSS で指定してください。Controller の `style` を当てると、要素のインラインの `font-size` は上書きされます
-- 要素の高さは、CSS かレイアウト（`height`・`max-height`・flex・grid など）で決まっている場合だけ制約にします。高さが中身に合わせて伸びる要素では、幅と行数だけで大きさを決めます（そのため、縮めた後に幅が広がれば、また大きくなります）
-- CSS の font-size と、高さが決まっているかを読み取るときに、要素の font-size を一時的に変えて、すぐに元に戻します（画面には表示されません）
+- 要素の高さは、`createTruncateTextController` と同じく、CSS かレイアウトで決まっている場合だけ制約にします。高さが中身に合わせて伸びる要素では、幅と行数だけで大きさを決めます（そのため、縮めた後に幅が広がれば、また大きくなります）
+- CSS の font-size と、高さが決まっているかを読み取るときに、要素の font-size と line-height を一時的に変えて、すぐに元に戻します（画面には表示されません）
 - `line-height` は、単位なし・`em`・`%` なら文字の大きさに比例し、`px` なら固定のまま測ります。`letter-spacing` などを `em` で指定している場合は、文字の大きさに比例しないものとして測ります
 - 利用者がブラウザーの設定で最小のフォントサイズを指定している場合、それより小さくはなりません。その場合は収まらないと判定し、`isOverflowing` で知らせます（利用者の読みやすさのための設定を尊重するため、`transform` で縮めることはしません）
+
+### `createChooseTextController`
+
+```ts
+createChooseTextController(candidates: readonly string[], options?: ChooseTextControllerOptions): ChooseTextController
+```
+
+要素の大きさ（幅・高さ）と行数に収まる表現を、候補から選ぶ Controller を作ります。候補を前から順に測り、最初に収まったものを表示します。
+
+- 候補は望ましい順に並べます。候補の中身は区別しないので、書式化した数値や日付などを、呼び出す側で作って渡します
+- どの候補も収まらない場合は最後の候補を表示し、`isOverflowing` で知らせます
+- 空の配列は、空文字を1つ渡したものとして扱います
+- オプションは `wrap`・`maxLines`・`disabled` です（`createTruncateTextController` と同じ）
+
+```ts
+const controller = createChooseTextController([
+  '2026年10月26日（月）',
+  '2026/10/26',
+  '10/26',
+]);
+```
+
+#### `ChooseTextController`
+
+メソッドは `TruncateTextController` と同じです。`update` は、文字列の代わりに候補の配列を受け取ります。
+
+`ChooseTextSnapshot` のプロパティ:
+
+| プロパティ      | 型                 | 説明                                                                       |
+| --------------- | ------------------ | -------------------------------------------------------------------------- |
+| `displayText`   | `string`           | 表示する文字列（選んだ候補）                                               |
+| `index`         | `number`           | 選んだ候補の番号。未計測の間と、止めている間は `0`（最初の候補を表示する） |
+| `isOverflowing` | `boolean \| null`  | どの候補も収まらないか。未計測の間と、止めている間は `null`                |
+| `style`         | `TextFittingStyle` | 表示する要素に当てるスタイル                                               |
+
+### `createFitTextController`
+
+```ts
+createFitTextController(text: string | readonly string[], options?: FitTextControllerOptions): FitTextController
+```
+
+候補を選ぶ・文字の大きさを変える・省略するを組み合わせて、要素の大きさ（幅・高さ）と行数に文字列を収める Controller を作ります。各機能は、指定したときだけ有効になります。
+
+| 機能         | 有効にする方法                                                         |
+| ------------ | ---------------------------------------------------------------------- |
+| 候補を選ぶ   | 第1引数に候補の配列を渡す。文字列を1つ渡せば、候補の切り替えは起きない |
+| 文字の大きさ | `minFontSize` か `maxFontSize` を指定する                              |
+| 省略する     | `truncate: true` を指定する                                            |
+
+試す順序は `resizeFirst` で選びます。省略は常に最後の手段で、最後の候補を下限の大きさで省略します。
+
+| `resizeFirst`   | 順序                                                                   | 向いている場面                                     |
+| --------------- | ---------------------------------------------------------------------- | -------------------------------------------------- |
+| `false`（既定） | 各候補を上限の大きさで試す → 最後の候補を縮める → 最後の候補を省略する | 文字の大きさを揃えたい（ダッシュボードの数値など） |
+| `true`          | 各候補を縮めながら順に試す → 最後の候補を省略する                      | 正確な表現をできるだけ残したい                     |
+
+例えば `['1,234,567', '1.2M']` を `maxFontSize: 48` で収める場合、`false` では `1,234,567`（48px）→ `1.2M`（48px）→ `1.2M`（縮小）の順に、`true` では `1,234,567`（48px）→ `1,234,567`（縮小）→ `1.2M`（縮小）の順に試します。`maxFontSize` が `Infinity` の場合は、どちらでも `true` と同じ動作になります。
+
+どの手段でも収まらない場合は、最後の候補を下限の大きさで表示し、`isOverflowing` で知らせます。
+
+```ts
+const controller = createFitTextController(['1,234,567', '1.2M'], {
+  minFontSize: 12,
+  maxFontSize: 48,
+  truncate: true,
+});
+```
+
+| オプション          | 型                 | 説明                                                                                                                                      |
+| ------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?`      | `number`           | `createResizeTextController` と同じ。指定すると文字の大きさを変える                                                                       |
+| `maxFontSize?`      | `number`           | `createResizeTextController` と同じ。指定すると文字の大きさを変える                                                                       |
+| `truncate?`         | `boolean`          | 最後の手段として省略する。デフォルトは `false`                                                                                            |
+| `resizeFirst?`      | `boolean`          | 候補を切り替える前に、文字を縮める。デフォルトは `false`                                                                                  |
+| `maxChars?`         | `number`           | 省略記号を含めた書記素の数の上限。`truncate` が `true` のときだけ使い、これを超える候補は選ばず、最後の候補はこの数に収まるように省略する |
+| `ellipsis?`         | `string`           | `truncateText` と同じ                                                                                                                     |
+| `truncatePosition?` | `TruncatePosition` | `truncateText` と同じ                                                                                                                     |
+| `truncateBoundary?` | `TruncateBoundary` | `truncateText` と同じ                                                                                                                     |
+| `locale?`           | `string`           | `truncateText` と同じ                                                                                                                     |
+| `wrap?`             | `TextWrap`         | `createTruncateTextController` と同じ                                                                                                     |
+| `maxLines?`         | `number`           | `createTruncateTextController` と同じ                                                                                                     |
+| `disabled?`         | `boolean`          | 動作を止める。止めている間は計測せず、最初の候補を表示する。デフォルトは `false`                                                          |
+
+#### `FitTextController`
+
+メソッドは `TruncateTextController` と同じです。`update` は、文字列か候補の配列を受け取ります。
+
+`FitTextSnapshot` のプロパティ:
+
+| プロパティ      | 型                | 説明                                                                                  |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `displayText`   | `string`          | 表示する文字列                                                                        |
+| `index`         | `number`          | 選んだ候補の番号。未計測の間と、止めている間は `0`                                    |
+| `fontSize`      | `number \| null`  | 選んだ font-size（px）。文字の大きさを変えない場合、未計測の間、止めている間は `null` |
+| `isTruncated`   | `boolean \| null` | 省略したか。未計測の間と、止めている間は `null`                                       |
+| `isOverflowing` | `boolean \| null` | どの手段でも収まらないか。未計測の間と、止めている間は `null`                         |
+| `style`         | `ResizeTextStyle` | 表示する要素に当てるスタイル（文字の大きさを変える場合は、選んだ `fontSize` を含む）  |
+
+文字の大きさを変える場合の注意は、`createResizeTextController` と同じです。
 
 ### `Intl.Segmenter` について
 
@@ -235,6 +335,12 @@ controller.attach(element);
 | `TruncateTextControllerOptions` | `createTruncateTextController` のオプション                          |
 | `TruncateTextController`        | `createTruncateTextController` が返す Controller                     |
 | `TruncateTextSnapshot`          | `TruncateTextController` の結果                                      |
+| `ChooseTextControllerOptions`   | `createChooseTextController` のオプション                            |
+| `ChooseTextController`          | `createChooseTextController` が返す Controller                       |
+| `ChooseTextSnapshot`            | `ChooseTextController` の結果                                        |
+| `FitTextControllerOptions`      | `createFitTextController` のオプション                               |
+| `FitTextController`             | `createFitTextController` が返す Controller                          |
+| `FitTextSnapshot`               | `FitTextController` の結果                                           |
 | `ResizeTextControllerOptions`   | `createResizeTextController` のオプション                            |
 | `ResizeTextController`          | `createResizeTextController` が返す Controller                       |
 | `ResizeTextSnapshot`            | `ResizeTextController` の結果                                        |

@@ -4,8 +4,6 @@
 
 **[日本語のREADMEはこちら](./README.ja.md)**
 
-The current version provides truncation and resizing.
-
 ## Installation
 
 ```bash
@@ -40,11 +38,13 @@ The library does not interpret the content of the string. If you want to normali
 
 ## API
 
-| Function                                       | Description                                                                                                             |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `truncateText(text, options)`                  | Truncates a string so that its number of graphemes stays within a limit. Does not use the DOM                           |
-| `createTruncateTextController(text, options?)` | Creates a controller that truncates a string to fit an element's size (width and height) and lines. Requires the DOM    |
-| `createResizeTextController(text, options?)`   | Creates a controller that changes the font size to fit an element's size (width and height) and lines. Requires the DOM |
+| Function                                           | Description                                                                                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `truncateText(text, options)`                      | Truncates a string so that its number of graphemes stays within a limit. Does not use the DOM                                                 |
+| `createTruncateTextController(text, options?)`     | Creates a controller that truncates a string to fit an element's size (width and height) and lines. Requires the DOM                          |
+| `createResizeTextController(text, options?)`       | Creates a controller that changes the font size to fit an element's size (width and height) and lines. Requires the DOM                       |
+| `createChooseTextController(candidates, options?)` | Creates a controller that chooses, from candidates, the expression that fits an element's size (width and height) and lines. Requires the DOM |
+| `createFitTextController(text, options?)`          | Creates a controller that fits text into an element's size and lines by combining choosing, resizing, and truncating. Requires the DOM        |
 
 ### `truncateText`
 
@@ -147,7 +147,8 @@ Properties of `TruncateTextSnapshot`:
 #### About the element's size
 
 - The element's width must be determined by layout (a block element, a flex or grid item, and so on). Inline elements, whose width follows their content, are never truncated
-- When wrapping (`wrap` is `'normal'` or `'anywhere'`), determine the element's height with CSS (`height` / `max-height`) or layout (flex, grid, and so on), or specify `maxLines`. If the element's height grows with its content and there is no `maxLines`, the full text is displayed at first, but if the text gets longer or the width gets narrower afterwards, it keeps being truncated to fit the initial height
+- The element's height is used as a constraint only when it is determined by CSS (`height` / `max-height`) or layout (flex, grid, and so on). For an element whose height grows with its content, only the width and `maxLines` are checked. So when wrapping (`wrap` is `'normal'` or `'anywhere'`) in an element whose height grows with its content and without `maxLines`, the text is not truncated (the element grows to show the full text)
+- To determine whether the height is fixed, the controller temporarily changes the element's font size and line height (it restores them immediately, so this is never painted)
 - While stopped with `disabled`, the full text may overflow if the element's height is set with CSS. Remove the height restriction as well when displaying the full text
 
 ```ts
@@ -209,10 +210,109 @@ Properties of `ResizeTextSnapshot`:
 #### Notes on changing the font size
 
 - Specify the element's CSS font size with CSS such as a class. Applying the controller's `style` overrides the element's inline `font-size`
-- The element's height is used as a constraint only when it is determined by CSS or layout (`height`, `max-height`, flex, grid, and so on). For an element whose height grows with its content, the size is determined by the width and lines only (so after shrinking, it grows again when the width gets wider)
-- To read the CSS font size and whether the height is fixed, the controller temporarily changes the element's font size and restores it immediately (it is never painted)
+- As with `createTruncateTextController`, the element's height is used as a constraint only when it is determined by CSS or layout. For an element whose height grows with its content, the size is determined by the width and lines only (so after shrinking, it grows again when the width gets wider)
+- To read the CSS font size and whether the height is fixed, the controller temporarily changes the element's font size and line height and restores them immediately (it is never painted)
 - A unitless, `em`, or `%` `line-height` is measured as scaling with the font size, and a `px` value as fixed. `letter-spacing` and similar properties specified in `em` are measured as not scaling
 - If the user has set a minimum font size in the browser settings, the text never gets smaller than that. In that case it is judged not to fit and reported with `isOverflowing` (the controller does not shrink it with `transform`, to respect the user's readability setting)
+
+### `createChooseTextController`
+
+```ts
+createChooseTextController(candidates: readonly string[], options?: ChooseTextControllerOptions): ChooseTextController
+```
+
+Creates a controller that chooses, from candidates, the expression that fits the element's size (width and height) and number of lines. It measures the candidates in order and displays the first one that fits.
+
+- Order the candidates from most to least preferred. The content of the candidates is not interpreted, so format numbers, dates, and so on yourself and pass the results
+- If no candidate fits, the last one is displayed and `isOverflowing` reports it
+- An empty array is treated as an array with one empty string
+- The options are `wrap`, `maxLines`, and `disabled` (same as `createTruncateTextController`)
+
+```ts
+const controller = createChooseTextController([
+  'Monday, October 26, 2026',
+  '2026/10/26',
+  '10/26',
+]);
+```
+
+#### `ChooseTextController`
+
+The methods are the same as `TruncateTextController`. `update` takes an array of candidates instead of a string.
+
+Properties of `ChooseTextSnapshot`:
+
+| Property        | Type               | Description                                                                                                  |
+| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `displayText`   | `string`           | The text to display (the chosen candidate)                                                                   |
+| `index`         | `number`           | The index of the chosen candidate. `0` while not yet measured and while stopped (the first one is displayed) |
+| `isOverflowing` | `boolean \| null`  | Whether no candidate fits. `null` while not yet measured and while stopped                                   |
+| `style`         | `TextFittingStyle` | The style to apply to the element                                                                            |
+
+### `createFitTextController`
+
+```ts
+createFitTextController(text: string | readonly string[], options?: FitTextControllerOptions): FitTextController
+```
+
+Creates a controller that fits a string into the element's size (width and height) and number of lines by combining choosing among candidates, resizing, and truncating. Each feature is enabled only when specified.
+
+| Feature                   | How to enable                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| Choosing among candidates | Pass an array of candidates as the first argument. With a single string, no switching happens |
+| Resizing                  | Specify `minFontSize` or `maxFontSize`                                                        |
+| Truncating                | Specify `truncate: true`                                                                      |
+
+`resizeFirst` selects the order. Truncation is always the last resort: the last candidate is truncated at the lower size limit.
+
+| `resizeFirst`     | Order                                                                                          | Suited for                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `false` (default) | Try each candidate at the upper size → shrink the last candidate → truncate the last candidate | Keeping font sizes consistent (dashboard numbers, and so on) |
+| `true`            | Try each candidate while shrinking → truncate the last candidate                               | Keeping the precise expression as long as possible           |
+
+For example, when fitting `['1,234,567', '1.2M']` with `maxFontSize: 48`, `false` tries `1,234,567` (48px) → `1.2M` (48px) → `1.2M` (shrunk), and `true` tries `1,234,567` (48px) → `1,234,567` (shrunk) → `1.2M` (shrunk). If `maxFontSize` is `Infinity`, both behave like `true`.
+
+If nothing fits, the last candidate is displayed at the lower size limit and `isOverflowing` reports it.
+
+```ts
+const controller = createFitTextController(['1,234,567', '1.2M'], {
+  minFontSize: 12,
+  maxFontSize: 48,
+  truncate: true,
+});
+```
+
+| Option              | Type               | Description                                                                                                                                                               |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?`      | `number`           | Same as `createResizeTextController`. Specifying it enables resizing                                                                                                      |
+| `maxFontSize?`      | `number`           | Same as `createResizeTextController`. Specifying it enables resizing                                                                                                      |
+| `truncate?`         | `boolean`          | Truncates as the last resort. Defaults to `false`                                                                                                                         |
+| `resizeFirst?`      | `boolean`          | Shrinks the text before switching candidates. Defaults to `false`                                                                                                         |
+| `maxChars?`         | `number`           | Maximum number of graphemes, including the ellipsis. Used only when `truncate` is `true`: candidates exceeding it are not chosen, and the last one is truncated to fit it |
+| `ellipsis?`         | `string`           | Same as `truncateText`                                                                                                                                                    |
+| `truncatePosition?` | `TruncatePosition` | Same as `truncateText`                                                                                                                                                    |
+| `truncateBoundary?` | `TruncateBoundary` | Same as `truncateText`                                                                                                                                                    |
+| `locale?`           | `string`           | Same as `truncateText`                                                                                                                                                    |
+| `wrap?`             | `TextWrap`         | Same as `createTruncateTextController`                                                                                                                                    |
+| `maxLines?`         | `number`           | Same as `createTruncateTextController`                                                                                                                                    |
+| `disabled?`         | `boolean`          | Stops the controller. While stopped, it does not measure and displays the first candidate. Defaults to `false`                                                            |
+
+#### `FitTextController`
+
+The methods are the same as `TruncateTextController`. `update` takes a string or an array of candidates.
+
+Properties of `FitTextSnapshot`:
+
+| Property        | Type              | Description                                                                                      |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `displayText`   | `string`          | The text to display                                                                              |
+| `index`         | `number`          | The index of the chosen candidate. `0` while not yet measured and while stopped                  |
+| `fontSize`      | `number \| null`  | The selected font size (px). `null` when not resizing, while not yet measured, and while stopped |
+| `isTruncated`   | `boolean \| null` | Whether the text was truncated. `null` while not yet measured and while stopped                  |
+| `isOverflowing` | `boolean \| null` | Whether nothing fits. `null` while not yet measured and while stopped                            |
+| `style`         | `ResizeTextStyle` | The style to apply to the element (includes the selected `fontSize` when resizing)               |
+
+The notes on resizing are the same as `createResizeTextController`.
 
 ### About `Intl.Segmenter`
 
@@ -235,6 +335,12 @@ Truncating icon fonts drawn with ligatures (such as `home` in Material Icons) br
 | `TruncateTextControllerOptions` | Options of `createTruncateTextController`                               |
 | `TruncateTextController`        | The controller returned by `createTruncateTextController`               |
 | `TruncateTextSnapshot`          | The result of `TruncateTextController`                                  |
+| `ChooseTextControllerOptions`   | Options of `createChooseTextController`                                 |
+| `ChooseTextController`          | The controller returned by `createChooseTextController`                 |
+| `ChooseTextSnapshot`            | The result of `ChooseTextController`                                    |
+| `FitTextControllerOptions`      | Options of `createFitTextController`                                    |
+| `FitTextController`             | The controller returned by `createFitTextController`                    |
+| `FitTextSnapshot`               | The result of `FitTextController`                                       |
 | `ResizeTextControllerOptions`   | Options of `createResizeTextController`                                 |
 | `ResizeTextController`          | The controller returned by `createResizeTextController`                 |
 | `ResizeTextSnapshot`            | The result of `ResizeTextController`                                    |

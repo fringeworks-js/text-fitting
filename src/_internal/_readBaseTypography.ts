@@ -34,7 +34,7 @@ const TOLERANCE = 0.5;
  * - CSS の font-size は、Controller が当てた font-size（`applied`）を一時的に外して読む
  * - line-height は、font-size を2倍にしたときに2倍になれば比例する（単位なし・em・%）とみなす。
  *   getComputedStyle は単位なしの line-height も px で返すため、そのまま写すと文字の大きさに比例しない
- * - font-size を 1px にしても要素の高さが変わらなければ、高さは CSS かレイアウトで決まっているとみなす
+ * - font-size を 1px（line-height を 0）にしても要素の高さが変わらなければ、高さは CSS かレイアウトで決まっているとみなす
  *
  * DOM が要る
  *
@@ -49,13 +49,18 @@ export default function _readBaseTypography(
   const view = element.ownerDocument.defaultView!;
   const { style } = element;
   const saved = style.getPropertyValue('font-size');
+  const savedLineHeight = style.getPropertyValue('line-height');
   const priority = style.getPropertyPriority('font-size');
-  const setFontSize = (value: string) => {
+  const lineHeightPriority = style.getPropertyPriority('line-height');
+  const setProperty = (name: string, value: string, important: string) => {
     if (value) {
-      style.setProperty('font-size', value, priority);
+      style.setProperty(name, value, important);
     } else {
-      style.removeProperty('font-size');
+      style.removeProperty(name);
     }
+  };
+  const setFontSize = (value: string) => {
+    setProperty('font-size', value, priority);
   };
 
   try {
@@ -70,8 +75,11 @@ export default function _readBaseTypography(
     setFontSize(`${fontSize * 2}px`);
     const doubledLineHeight = view.getComputedStyle(element).lineHeight;
 
+    // line-height を px で固定していると、font-size を小さくしても行の高さが変わらないため、line-height も 0 にする
     setFontSize('1px');
+    setProperty('line-height', '0px', lineHeightPriority);
     const tinyHeight = _getContentBoxSize(element).height;
+    setProperty('line-height', savedLineHeight, lineHeightPriority);
 
     let lineHeight = baseLineHeight;
     if (baseLineHeight !== 'normal') {

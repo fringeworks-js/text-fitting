@@ -153,6 +153,17 @@ describe('createResizeTextController', () => {
       expect(controller.getSnapshot().fontSize).toBeGreaterThan(narrow);
     });
 
+    it('line-height が px の場合も、縮めた後に幅が広がれば大きくする', async () => {
+      const host = createHost({ width: '150px', lineHeight: '20px' });
+      const controller = createResizeTextController(LONG_TEXT);
+      bind(controller, host);
+      expect(controller.getSnapshot().fontSize).toBeLessThan(BASE_FONT_SIZE);
+      host.style.width = '2000px';
+      await nextFrames();
+      expect(controller.getSnapshot().fontSize).toBe(BASE_FONT_SIZE);
+      expect(host.style.lineHeight).toBe('20px');
+    });
+
     it('CSS の font-size を読むために変えた要素のスタイルを元に戻す', () => {
       const host = createHost({ width: '150px' });
       const controller = createResizeTextController(LONG_TEXT);

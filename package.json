@@ -1,6 +1,6 @@
 {
   "name": "@fringeworks/text-fitting",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "A library some will find handy, for fitting text into an element by truncating it, resizing it, or choosing among candidates.",
   "keywords": [

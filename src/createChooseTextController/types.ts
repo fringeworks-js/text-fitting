@@ -30,6 +30,11 @@ export type ChooseTextSnapshot = {
    * 表示する要素に当てるスタイル
    */
   readonly style: Readonly<TextFittingStyle>;
+  /**
+   * 検知した変化（要素の大きさの変化・フォントの読み込み）の反映を待っているか\
+   * detectionDelay の間は true。その間の結果は、最後に計測したときのもの
+   */
+  readonly isPending: boolean;
 };
 
 /**

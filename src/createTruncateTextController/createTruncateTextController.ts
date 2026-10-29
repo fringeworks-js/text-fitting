@@ -22,7 +22,7 @@ import type {
  * 要素の大きさ（幅・高さ）と行数に収まるように、文字列を省略する Controller を作る\
  * DOM が要る（作るだけなら DOM に触れないので、SSR でも作れる）
  *
- * - 表示する要素を attach で接続すると計測し、要素の大きさの変化とフォントの読み込みで測り直す
+ * - 表示する要素を attach で接続すると計測し、要素の大きさの変化とフォントの読み込みで測り直す（detectionDelay で、変化が続いている間は待てる）
  * - 表示する文字列と、要素に当てるスタイルを snapshot で返す。要素の本文やスタイルは書き換えない
  * - 要素の高さは、CSS かレイアウトで決まっている必要がある（中身に合わせて伸びる要素では、maxLines を指定する）
  *
@@ -39,7 +39,10 @@ export default function createTruncateTextController(
   let truncator = _createTruncator(text, options);
   let style = _createTextStyle(options.wrap);
 
-  const compute: ComputeSnapshot<TruncateTextSnapshot> = (element, size) => {
+  const compute: ComputeSnapshot<Omit<TruncateTextSnapshot, 'isPending'>> = (
+    element,
+    size,
+  ) => {
     if (currentOptions.disabled) {
       return { displayText: currentText, isTruncated: false, style };
     }
@@ -59,7 +62,11 @@ export default function createTruncateTextController(
     };
   };
 
-  const core = _createControllerCore(compute, _isEqualSnapshot);
+  const core = _createControllerCore(
+    compute,
+    _isEqualSnapshot,
+    () => currentOptions,
+  );
 
   const update = (
     nextText: string,
@@ -124,8 +131,8 @@ function _selectText(
  * 2つの snapshot が等しいか
  */
 function _isEqualSnapshot(
-  a: TruncateTextSnapshot,
-  b: TruncateTextSnapshot,
+  a: Omit<TruncateTextSnapshot, 'isPending'>,
+  b: Omit<TruncateTextSnapshot, 'isPending'>,
 ): boolean {
   return (
     a.displayText === b.displayText &&

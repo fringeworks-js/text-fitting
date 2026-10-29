@@ -116,6 +116,7 @@ describe('createResizeTextController', () => {
         fontSize: null,
         isOverflowing: null,
         style: { whiteSpace: 'pre' },
+        isPending: false,
       });
     });
   });
@@ -366,6 +367,35 @@ describe('createResizeTextController', () => {
       const controller = createResizeTextController(LONG_TEXT);
       bind(controller, host);
       expect(document.body.children).toHaveLength(1);
+    });
+
+    it('hideWhilePending で隠している間も、選んだ font-size を当て続ける', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createResizeTextController(LONG_TEXT, {
+        detectionDelay: 200,
+        hideWhilePending: true,
+      });
+      bind(controller, host);
+      // 高さが中身に合わせて伸びるため、つないだ直後に1回余分に測る。それが落ち着くまで待つ
+      await nextFrames();
+      await nextFrames();
+      const before = controller.getSnapshot();
+
+      host.style.width = '300px';
+      await nextFrames();
+
+      const pending = controller.getSnapshot();
+      expect(pending.isPending).toBe(true);
+      expect(pending.fontSize).toBe(before.fontSize);
+      expect(pending.style).toEqual({ ...before.style, visibility: 'hidden' });
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 300);
+      });
+      const after = controller.getSnapshot();
+      expect(after.isPending).toBe(false);
+      expect(after.style.visibility).toBeUndefined();
+      expect(after.fontSize).toBeGreaterThan(before.fontSize!);
     });
   });
 });

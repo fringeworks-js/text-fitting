@@ -43,7 +43,10 @@ export default function createResizeTextController(
   // 要素に当てた font-size（CSS の font-size を読むときに外すため）
   let applied: string | undefined;
 
-  const compute: ComputeSnapshot<ResizeTextSnapshot> = (element, size) => {
+  const compute: ComputeSnapshot<Omit<ResizeTextSnapshot, 'isPending'>> = (
+    element,
+    size,
+  ) => {
     if (currentOptions.disabled || !element || !size) {
       applied = undefined;
       return {
@@ -70,7 +73,11 @@ export default function createResizeTextController(
     };
   };
 
-  const core = _createControllerCore(compute, _isEqualSnapshot);
+  const core = _createControllerCore(
+    compute,
+    _isEqualSnapshot,
+    () => currentOptions,
+  );
 
   const update = (
     nextText: string,
@@ -140,8 +147,8 @@ function _selectFontSize(
  * 2つの snapshot が等しいか
  */
 function _isEqualSnapshot(
-  a: ResizeTextSnapshot,
-  b: ResizeTextSnapshot,
+  a: Omit<ResizeTextSnapshot, 'isPending'>,
+  b: Omit<ResizeTextSnapshot, 'isPending'>,
 ): boolean {
   return (
     a.displayText === b.displayText &&

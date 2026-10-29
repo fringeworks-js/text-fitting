@@ -56,6 +56,7 @@ describe('createChooseTextController', () => {
       index: 0,
       isOverflowing: null,
       style: { whiteSpace: 'pre' },
+      isPending: false,
     });
   });
 

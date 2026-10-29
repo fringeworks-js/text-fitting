@@ -47,6 +47,22 @@ export type TextLayoutOptions = {
    * @default false
    */
   disabled?: boolean;
+
+  /**
+   * 要素の大きさの変化とフォントの読み込みを検知してから、計測に反映するまでの時間（ミリ秒）\
+   * この間に続けて検知した場合は、最後の検知から数え直す（大きさを変え続けている間は計測しない）。
+   * 0 の場合は次のフレームで計測する。NaN・負の値は 0 として扱う。
+   * attach・update・refresh による計測は待たない
+   * @default 0
+   */
+  detectionDelay?: number;
+
+  /**
+   * 検知した変化の反映を待っている間（snapshot の isPending が true の間）、style に `visibility: hidden` を加えて隠す\
+   * 要素の大きさは変わらない。detectionDelay が 0 の場合は待たないので、隠さない
+   * @default false
+   */
+  hideWhilePending?: boolean;
 };
 
 /**
@@ -63,6 +79,11 @@ export type TextFittingStyle = {
    * wrap が 'anywhere' のときだけ指定する
    */
   overflowWrap?: 'anywhere';
+
+  /**
+   * hideWhilePending が true で、検知した変化の反映を待っている間だけ指定する
+   */
+  visibility?: 'hidden';
 };
 
 /**

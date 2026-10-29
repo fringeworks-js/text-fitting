@@ -92,7 +92,7 @@ createTruncateTextController(text: string, options?: TruncateTextControllerOptio
 
 要素の大きさ（幅・高さ）と行数に収まる最も長い文字列を、実際に描画して測って選ぶ Controller を作ります。
 
-- 表示する要素を `attach` で接続すると計測し、要素の大きさの変化とフォントの読み込みで測り直します
+- 表示する要素を `attach` で接続すると計測し、要素の大きさの変化とフォントの読み込みで測り直します。要素の大きさが変わらずに、文字の書式（`font-size`・`letter-spacing` など）だけが変わった場合は自動では測り直さないので、`refresh` を呼んでください
 - 表示する文字列と、要素に当てるスタイルを snapshot で返します。Controller は要素の本文やスタイルを書き換えないので、snapshot の `displayText` と `style` を同じ要素に当ててください。`style` を当てないと、計測した書式と表示の書式がずれて、結果が正しくなりません
 - 作るだけなら DOM に触れないので、SSR でも作れます。計測には DOM が要ります
 
@@ -112,16 +112,18 @@ render();
 controller.attach(element);
 ```
 
-| オプション          | 型                 | 説明                                                                                                                                                |
-| ------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wrap?`             | `TextWrap`         | 折り返し。`'none'`（折り返さない）・`'normal'`（通常の位置で折り返す）・`'anywhere'`（区切りの無い長い単語も途中で折り返す）。デフォルトは `'none'` |
-| `maxLines?`         | `number`           | 行数の上限。`NaN` は上限なし、負の値は `0`、小数は切り捨てて扱う                                                                                    |
-| `maxChars?`         | `number`           | 省略記号を含めた書記素の数の上限。要素の大きさに加えて、この上限も守る                                                                              |
-| `disabled?`         | `boolean`          | 動作を止める。止めている間は計測せず、元の文字列をそのまま表示する。デフォルトは `false`                                                            |
-| `ellipsis?`         | `string`           | `truncateText` と同じ                                                                                                                               |
-| `truncatePosition?` | `TruncatePosition` | `truncateText` と同じ                                                                                                                               |
-| `truncateBoundary?` | `TruncateBoundary` | `truncateText` と同じ                                                                                                                               |
-| `locale?`           | `string`           | `truncateText` と同じ                                                                                                                               |
+| オプション          | 型                 | 説明                                                                                                                                                                                                     |
+| ------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wrap?`             | `TextWrap`         | 折り返し。`'none'`（折り返さない）・`'normal'`（通常の位置で折り返す）・`'anywhere'`（区切りの無い長い単語も途中で折り返す）。デフォルトは `'none'`                                                      |
+| `maxLines?`         | `number`           | 行数の上限。`NaN` は上限なし、負の値は `0`、小数は切り捨てて扱う                                                                                                                                         |
+| `maxChars?`         | `number`           | 省略記号を含めた書記素の数の上限。要素の大きさに加えて、この上限も守る                                                                                                                                   |
+| `disabled?`         | `boolean`          | 動作を止める。止めている間は計測せず、元の文字列をそのまま表示する。デフォルトは `false`                                                                                                                 |
+| `detectionDelay?`   | `number`           | 要素の大きさの変化とフォントの読み込みを検知してから、計測に反映するまでの時間（ミリ秒）。続けて検知した場合は数え直す。`0` は次のフレームで計測する。デフォルトは `0`（下記の「変化が続くときの計測」） |
+| `hideWhilePending?` | `boolean`          | 検知した変化の反映を待っている間、`style` に `visibility: hidden` を加えて隠す。デフォルトは `false`                                                                                                     |
+| `ellipsis?`         | `string`           | `truncateText` と同じ                                                                                                                                                                                    |
+| `truncatePosition?` | `TruncatePosition` | `truncateText` と同じ                                                                                                                                                                                    |
+| `truncateBoundary?` | `TruncateBoundary` | `truncateText` と同じ                                                                                                                                                                                    |
+| `locale?`           | `string`           | `truncateText` と同じ                                                                                                                                                                                    |
 
 `wrap: 'none'` では、改行で区切った行ごとに、要素の幅に収めます。
 
@@ -138,11 +140,12 @@ controller.attach(element);
 
 `TruncateTextSnapshot` のプロパティ:
 
-| プロパティ    | 型                 | 説明                                                                                                                  |
-| ------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `displayText` | `string`           | 表示する文字列                                                                                                        |
-| `isTruncated` | `boolean \| null`  | 省略したか。未計測（要素を接続していない、DOM に無い、`display: none`、幅が 0）の間は `null` で、元の文字列を表示する |
-| `style`       | `TextFittingStyle` | 表示する要素に当てるスタイル（`whiteSpace` と、`wrap: 'anywhere'` のときの `overflowWrap`）                           |
+| プロパティ    | 型                 | 説明                                                                                                                                          |
+| ------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayText` | `string`           | 表示する文字列                                                                                                                                |
+| `isTruncated` | `boolean \| null`  | 省略したか。未計測（要素を接続していない、DOM に無い、`display: none`、幅が 0）の間は `null` で、元の文字列を表示する                         |
+| `isPending`   | `boolean`          | 検知した変化の反映を待っているか（`detectionDelay` の間は `true`）。その間の結果は、最後に計測したときのもの                                  |
+| `style`       | `TextFittingStyle` | 表示する要素に当てるスタイル（`whiteSpace` と、`wrap: 'anywhere'` のときの `overflowWrap`、`hideWhilePending` で待っている間の `visibility`） |
 
 #### 要素の大きさについて
 
@@ -184,13 +187,15 @@ render();
 controller.attach(element);
 ```
 
-| オプション     | 型         | 説明                                                                                                                                                                                      |
-| -------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `minFontSize?` | `number`   | font-size の下限（px）。省略した場合は下限を設けない（実際にはブラウザーの最小のフォントサイズで止まる）。長い文字列では、読める大きさを保つために指定する。`0` 以下と `NaN` は省略と同じ |
-| `maxFontSize?` | `number`   | font-size の上限（px）。省略した場合は要素の CSS の font-size。`Infinity` を指定すると、収まる限りどこまでも大きくする。`0` 以下と `NaN` は省略と同じ                                     |
-| `wrap?`        | `TextWrap` | `createTruncateTextController` と同じ                                                                                                                                                     |
-| `maxLines?`    | `number`   | `createTruncateTextController` と同じ                                                                                                                                                     |
-| `disabled?`    | `boolean`  | 動作を止める。止めている間は計測せず、font-size を指定しない（CSS の大きさのまま）。デフォルトは `false`                                                                                  |
+| オプション          | 型         | 説明                                                                                                                                                                                                     |
+| ------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?`      | `number`   | font-size の下限（px）。省略した場合は下限を設けない（実際にはブラウザーの最小のフォントサイズで止まる）。長い文字列では、読める大きさを保つために指定する。`0` 以下と `NaN` は省略と同じ                |
+| `maxFontSize?`      | `number`   | font-size の上限（px）。省略した場合は要素の CSS の font-size。`Infinity` を指定すると、収まる限りどこまでも大きくする。`0` 以下と `NaN` は省略と同じ                                                    |
+| `wrap?`             | `TextWrap` | `createTruncateTextController` と同じ                                                                                                                                                                    |
+| `maxLines?`         | `number`   | `createTruncateTextController` と同じ                                                                                                                                                                    |
+| `disabled?`         | `boolean`  | 動作を止める。止めている間は計測せず、font-size を指定しない（CSS の大きさのまま）。デフォルトは `false`                                                                                                 |
+| `detectionDelay?`   | `number`   | 要素の大きさの変化とフォントの読み込みを検知してから、計測に反映するまでの時間（ミリ秒）。続けて検知した場合は数え直す。`0` は次のフレームで計測する。デフォルトは `0`（下記の「変化が続くときの計測」） |
+| `hideWhilePending?` | `boolean`  | 検知した変化の反映を待っている間、`style` に `visibility: hidden` を加えて隠す。デフォルトは `false`                                                                                                     |
 
 `minFontSize` が上限（`maxFontSize`、省略した場合は CSS の font-size）より大きい場合は、`minFontSize` の大きさに固定します。下限は読める大きさを保つためのものなので、上限より優先します。
 
@@ -200,12 +205,13 @@ controller.attach(element);
 
 `ResizeTextSnapshot` のプロパティ:
 
-| プロパティ      | 型                | 説明                                                                            |
-| --------------- | ----------------- | ------------------------------------------------------------------------------- |
-| `displayText`   | `string`          | 表示する文字列（元の文字列のまま）                                              |
-| `fontSize`      | `number \| null`  | 選んだ font-size（px）。未計測の間と、止めている間は `null`                     |
-| `isOverflowing` | `boolean \| null` | 下限の大きさでも収まらないか。未計測の間と、止めている間は `null`               |
-| `style`         | `ResizeTextStyle` | 表示する要素に当てるスタイル（`whiteSpace`、`overflowWrap`、選んだ `fontSize`） |
+| プロパティ      | 型                | 説明                                                                                                         |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| `displayText`   | `string`          | 表示する文字列（元の文字列のまま）                                                                           |
+| `fontSize`      | `number \| null`  | 選んだ font-size（px）。未計測の間と、止めている間は `null`                                                  |
+| `isOverflowing` | `boolean \| null` | 下限の大きさでも収まらないか。未計測の間と、止めている間は `null`                                            |
+| `isPending`     | `boolean`         | 検知した変化の反映を待っているか（`detectionDelay` の間は `true`）。その間の結果は、最後に計測したときのもの |
+| `style`         | `ResizeTextStyle` | 表示する要素に当てるスタイル（`whiteSpace`、`overflowWrap`、選んだ `fontSize`）                              |
 
 #### 文字の大きさを変えるときの注意
 
@@ -226,7 +232,7 @@ createChooseTextController(candidates: readonly string[], options?: ChooseTextCo
 - 候補は望ましい順に並べます。候補の中身は区別しないので、書式化した数値や日付などを、呼び出す側で作って渡します
 - どの候補も収まらない場合は最後の候補を表示し、`isOverflowing` で知らせます
 - 空の配列は、空文字を1つ渡したものとして扱います
-- オプションは `wrap`・`maxLines`・`disabled` です（`createTruncateTextController` と同じ）
+- オプションは `wrap`・`maxLines`・`disabled`・`detectionDelay`・`hideWhilePending` です（`createTruncateTextController` と同じ）
 
 ```ts
 const controller = createChooseTextController([
@@ -242,12 +248,13 @@ const controller = createChooseTextController([
 
 `ChooseTextSnapshot` のプロパティ:
 
-| プロパティ      | 型                 | 説明                                                                       |
-| --------------- | ------------------ | -------------------------------------------------------------------------- |
-| `displayText`   | `string`           | 表示する文字列（選んだ候補）                                               |
-| `index`         | `number`           | 選んだ候補の番号。未計測の間と、止めている間は `0`（最初の候補を表示する） |
-| `isOverflowing` | `boolean \| null`  | どの候補も収まらないか。未計測の間と、止めている間は `null`                |
-| `style`         | `TextFittingStyle` | 表示する要素に当てるスタイル                                               |
+| プロパティ      | 型                 | 説明                                                                                                         |
+| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `displayText`   | `string`           | 表示する文字列（選んだ候補）                                                                                 |
+| `index`         | `number`           | 選んだ候補の番号。未計測の間と、止めている間は `0`（最初の候補を表示する）                                   |
+| `isOverflowing` | `boolean \| null`  | どの候補も収まらないか。未計測の間と、止めている間は `null`                                                  |
+| `isPending`     | `boolean`          | 検知した変化の反映を待っているか（`detectionDelay` の間は `true`）。その間の結果は、最後に計測したときのもの |
+| `style`         | `TextFittingStyle` | 表示する要素に当てるスタイル                                                                                 |
 
 ### `createFitTextController`
 
@@ -282,20 +289,22 @@ const controller = createFitTextController(['1,234,567', '1.2M'], {
 });
 ```
 
-| オプション          | 型                 | 説明                                                                                                                                      |
-| ------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `minFontSize?`      | `number`           | `createResizeTextController` と同じ。指定すると文字の大きさを変える                                                                       |
-| `maxFontSize?`      | `number`           | `createResizeTextController` と同じ。指定すると文字の大きさを変える                                                                       |
-| `truncate?`         | `boolean`          | 最後の手段として省略する。デフォルトは `false`                                                                                            |
-| `resizeFirst?`      | `boolean`          | 候補を切り替える前に、文字を縮める。デフォルトは `false`                                                                                  |
-| `maxChars?`         | `number`           | 省略記号を含めた書記素の数の上限。`truncate` が `true` のときだけ使い、これを超える候補は選ばず、最後の候補はこの数に収まるように省略する |
-| `ellipsis?`         | `string`           | `truncateText` と同じ                                                                                                                     |
-| `truncatePosition?` | `TruncatePosition` | `truncateText` と同じ                                                                                                                     |
-| `truncateBoundary?` | `TruncateBoundary` | `truncateText` と同じ                                                                                                                     |
-| `locale?`           | `string`           | `truncateText` と同じ                                                                                                                     |
-| `wrap?`             | `TextWrap`         | `createTruncateTextController` と同じ                                                                                                     |
-| `maxLines?`         | `number`           | `createTruncateTextController` と同じ                                                                                                     |
-| `disabled?`         | `boolean`          | 動作を止める。止めている間は計測せず、最初の候補を表示する。デフォルトは `false`                                                          |
+| オプション          | 型                 | 説明                                                                                                                                                                                                     |
+| ------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?`      | `number`           | `createResizeTextController` と同じ。指定すると文字の大きさを変える                                                                                                                                      |
+| `maxFontSize?`      | `number`           | `createResizeTextController` と同じ。指定すると文字の大きさを変える                                                                                                                                      |
+| `truncate?`         | `boolean`          | 最後の手段として省略する。デフォルトは `false`                                                                                                                                                           |
+| `resizeFirst?`      | `boolean`          | 候補を切り替える前に、文字を縮める。デフォルトは `false`                                                                                                                                                 |
+| `maxChars?`         | `number`           | 省略記号を含めた書記素の数の上限。`truncate` が `true` のときだけ使い、これを超える候補は選ばず、最後の候補はこの数に収まるように省略する                                                                |
+| `ellipsis?`         | `string`           | `truncateText` と同じ                                                                                                                                                                                    |
+| `truncatePosition?` | `TruncatePosition` | `truncateText` と同じ                                                                                                                                                                                    |
+| `truncateBoundary?` | `TruncateBoundary` | `truncateText` と同じ                                                                                                                                                                                    |
+| `locale?`           | `string`           | `truncateText` と同じ                                                                                                                                                                                    |
+| `wrap?`             | `TextWrap`         | `createTruncateTextController` と同じ                                                                                                                                                                    |
+| `maxLines?`         | `number`           | `createTruncateTextController` と同じ                                                                                                                                                                    |
+| `disabled?`         | `boolean`          | 動作を止める。止めている間は計測せず、最初の候補を表示する。デフォルトは `false`                                                                                                                         |
+| `detectionDelay?`   | `number`           | 要素の大きさの変化とフォントの読み込みを検知してから、計測に反映するまでの時間（ミリ秒）。続けて検知した場合は数え直す。`0` は次のフレームで計測する。デフォルトは `0`（下記の「変化が続くときの計測」） |
+| `hideWhilePending?` | `boolean`          | 検知した変化の反映を待っている間、`style` に `visibility: hidden` を加えて隠す。デフォルトは `false`                                                                                                     |
 
 #### `FitTextController`
 
@@ -303,16 +312,34 @@ const controller = createFitTextController(['1,234,567', '1.2M'], {
 
 `FitTextSnapshot` のプロパティ:
 
-| プロパティ      | 型                | 説明                                                                                  |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------- |
-| `displayText`   | `string`          | 表示する文字列                                                                        |
-| `index`         | `number`          | 選んだ候補の番号。未計測の間と、止めている間は `0`                                    |
-| `fontSize`      | `number \| null`  | 選んだ font-size（px）。文字の大きさを変えない場合、未計測の間、止めている間は `null` |
-| `isTruncated`   | `boolean \| null` | 省略したか。未計測の間と、止めている間は `null`                                       |
-| `isOverflowing` | `boolean \| null` | どの手段でも収まらないか。未計測の間と、止めている間は `null`                         |
-| `style`         | `ResizeTextStyle` | 表示する要素に当てるスタイル（文字の大きさを変える場合は、選んだ `fontSize` を含む）  |
+| プロパティ      | 型                | 説明                                                                                                         |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| `displayText`   | `string`          | 表示する文字列                                                                                               |
+| `index`         | `number`          | 選んだ候補の番号。未計測の間と、止めている間は `0`                                                           |
+| `fontSize`      | `number \| null`  | 選んだ font-size（px）。文字の大きさを変えない場合、未計測の間、止めている間は `null`                        |
+| `isTruncated`   | `boolean \| null` | 省略したか。未計測の間と、止めている間は `null`                                                              |
+| `isOverflowing` | `boolean \| null` | どの手段でも収まらないか。未計測の間と、止めている間は `null`                                                |
+| `isPending`     | `boolean`         | 検知した変化の反映を待っているか（`detectionDelay` の間は `true`）。その間の結果は、最後に計測したときのもの |
+| `style`         | `ResizeTextStyle` | 表示する要素に当てるスタイル（文字の大きさを変える場合は、選んだ `fontSize` を含む）                         |
 
 文字の大きさを変える場合の注意は、`createResizeTextController` と同じです。
+
+### 変化が続くときの計測（`detectionDelay`・`hideWhilePending`）
+
+既定では、要素の大きさの変化とフォントの読み込みを検知すると、次のフレームで計測します。ウィンドウの幅をドラッグで変えている間などは、毎フレーム計測し、結果も毎フレーム変わります。要素を多く並べる場合や、変えている途中の結果を見せたくない場合は、次のオプションを使います（4つの Controller で共通）。
+
+- `detectionDelay` にミリ秒を指定すると、最後に検知してからその時間だけ待って計測します。続けて検知した場合は数え直すので、大きさを変え続けている間は計測しません
+- 待っている間は、snapshot の `isPending` が `true` になり、結果は最後に計測したときのままです
+- `hideWhilePending: true` を指定すると、待っている間は `style` に `visibility: hidden` が加わり、文字列が隠れます。要素の大きさは変わりません。表示するときにフェードインさせたい場合は、`opacity` などの `transition` を自分のスタイルで指定してください
+- `attach`・`update`・`refresh` による計測は待ちません。待っている間に呼ぶと、その場で計測して待つのをやめます
+- 計測した直後の数フレームに検知した変化は、自分の結果（文字列や font-size）を描画したことによる変化とみなし、待たずに次のフレームで計測します（表示した直後にまた隠れないようにするため）
+
+```ts
+const controller = createTruncateTextController(text, {
+  detectionDelay: 150,
+  hideWhilePending: true,
+});
+```
 
 ### `Intl.Segmenter` について
 
@@ -329,25 +356,25 @@ const controller = createFitTextController(['1,234,567', '1.2M'], {
 
 ### 型
 
-| 型                              | 説明                                                                 |
-| ------------------------------- | -------------------------------------------------------------------- |
-| `TruncateTextOptions`           | `truncateText` のオプション                                          |
-| `TruncateTextControllerOptions` | `createTruncateTextController` のオプション                          |
-| `TruncateTextController`        | `createTruncateTextController` が返す Controller                     |
-| `TruncateTextSnapshot`          | `TruncateTextController` の結果                                      |
-| `ChooseTextControllerOptions`   | `createChooseTextController` のオプション                            |
-| `ChooseTextController`          | `createChooseTextController` が返す Controller                       |
-| `ChooseTextSnapshot`            | `ChooseTextController` の結果                                        |
-| `FitTextControllerOptions`      | `createFitTextController` のオプション                               |
-| `FitTextController`             | `createFitTextController` が返す Controller                          |
-| `FitTextSnapshot`               | `FitTextController` の結果                                           |
-| `ResizeTextControllerOptions`   | `createResizeTextController` のオプション                            |
-| `ResizeTextController`          | `createResizeTextController` が返す Controller                       |
-| `ResizeTextSnapshot`            | `ResizeTextController` の結果                                        |
-| `ResizeTextStyle`               | `ResizeTextController` が返す、表示する要素に当てるスタイル          |
-| `TruncateOptions`               | 省略の機能で共通のオプション                                         |
-| `TextLayoutOptions`             | 要素に収める機能で共通のオプション（`wrap`・`maxLines`・`disabled`） |
-| `TruncatePosition`              | 省略する位置（`'end' \| 'start' \| 'middle'`）                       |
-| `TruncateBoundary`              | 切る位置の単位（`'grapheme' \| 'word'`）                             |
-| `TextWrap`                      | 折り返し（`'none' \| 'normal' \| 'anywhere'`）                       |
-| `TextFittingStyle`              | 表示する要素に当てるスタイル                                         |
+| 型                              | 説明                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `TruncateTextOptions`           | `truncateText` のオプション                                                                                |
+| `TruncateTextControllerOptions` | `createTruncateTextController` のオプション                                                                |
+| `TruncateTextController`        | `createTruncateTextController` が返す Controller                                                           |
+| `TruncateTextSnapshot`          | `TruncateTextController` の結果                                                                            |
+| `ChooseTextControllerOptions`   | `createChooseTextController` のオプション                                                                  |
+| `ChooseTextController`          | `createChooseTextController` が返す Controller                                                             |
+| `ChooseTextSnapshot`            | `ChooseTextController` の結果                                                                              |
+| `FitTextControllerOptions`      | `createFitTextController` のオプション                                                                     |
+| `FitTextController`             | `createFitTextController` が返す Controller                                                                |
+| `FitTextSnapshot`               | `FitTextController` の結果                                                                                 |
+| `ResizeTextControllerOptions`   | `createResizeTextController` のオプション                                                                  |
+| `ResizeTextController`          | `createResizeTextController` が返す Controller                                                             |
+| `ResizeTextSnapshot`            | `ResizeTextController` の結果                                                                              |
+| `ResizeTextStyle`               | `ResizeTextController` が返す、表示する要素に当てるスタイル                                                |
+| `TruncateOptions`               | 省略の機能で共通のオプション                                                                               |
+| `TextLayoutOptions`             | 要素に収める機能で共通のオプション（`wrap`・`maxLines`・`disabled`・`detectionDelay`・`hideWhilePending`） |
+| `TruncatePosition`              | 省略する位置（`'end' \| 'start' \| 'middle'`）                                                             |
+| `TruncateBoundary`              | 切る位置の単位（`'grapheme' \| 'word'`）                                                                   |
+| `TextWrap`                      | 折り返し（`'none' \| 'normal' \| 'anywhere'`）                                                             |
+| `TextFittingStyle`              | 表示する要素に当てるスタイル                                                                               |

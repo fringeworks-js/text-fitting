@@ -25,7 +25,7 @@ import type {
 /**
  * 計測して決めた結果（スタイルを除く）
  */
-type FitResult = Omit<FitTextSnapshot, 'style'>;
+type FitResult = Omit<FitTextSnapshot, 'style' | 'isPending'>;
 
 /**
  * 候補を選ぶ・文字の大きさを変える・省略するを組み合わせて、要素の大きさ（幅・高さ）と行数に文字列を収める Controller を作る\
@@ -58,7 +58,10 @@ export default function createFitTextController(
   // 要素に当てた font-size（CSS の font-size を読むときに外すため）
   let applied: string | undefined;
 
-  const compute: ComputeSnapshot<FitTextSnapshot> = (element, size) => {
+  const compute: ComputeSnapshot<Omit<FitTextSnapshot, 'isPending'>> = (
+    element,
+    size,
+  ) => {
     if (currentOptions.disabled || !element || !size) {
       applied = undefined;
       return {
@@ -85,7 +88,11 @@ export default function createFitTextController(
     };
   };
 
-  const core = _createControllerCore(compute, _isEqualSnapshot);
+  const core = _createControllerCore(
+    compute,
+    _isEqualSnapshot,
+    () => currentOptions,
+  );
 
   const update = (
     nextText: string | readonly string[],
@@ -257,7 +264,10 @@ function _fit(
 /**
  * 2つの snapshot が等しいか
  */
-function _isEqualSnapshot(a: FitTextSnapshot, b: FitTextSnapshot): boolean {
+function _isEqualSnapshot(
+  a: Omit<FitTextSnapshot, 'isPending'>,
+  b: Omit<FitTextSnapshot, 'isPending'>,
+): boolean {
   return (
     a.displayText === b.displayText &&
     a.index === b.index &&

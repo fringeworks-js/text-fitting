@@ -35,7 +35,10 @@ export default function createChooseTextController(
   let currentOptions = options;
   let style = _createTextStyle(options.wrap);
 
-  const compute: ComputeSnapshot<ChooseTextSnapshot> = (element, size) => {
+  const compute: ComputeSnapshot<Omit<ChooseTextSnapshot, 'isPending'>> = (
+    element,
+    size,
+  ) => {
     if (currentOptions.disabled || !element || !size) {
       return {
         displayText: currentCandidates[0]!,
@@ -68,7 +71,11 @@ export default function createChooseTextController(
     }
   };
 
-  const core = _createControllerCore(compute, _isEqualSnapshot);
+  const core = _createControllerCore(
+    compute,
+    _isEqualSnapshot,
+    () => currentOptions,
+  );
 
   const update = (
     nextCandidates: readonly string[],
@@ -101,8 +108,8 @@ export default function createChooseTextController(
  * 2つの snapshot が等しいか
  */
 function _isEqualSnapshot(
-  a: ChooseTextSnapshot,
-  b: ChooseTextSnapshot,
+  a: Omit<ChooseTextSnapshot, 'isPending'>,
+  b: Omit<ChooseTextSnapshot, 'isPending'>,
 ): boolean {
   return (
     a.displayText === b.displayText &&

@@ -92,7 +92,7 @@ createTruncateTextController(text: string, options?: TruncateTextControllerOptio
 
 Creates a controller that selects the longest string that fits the element's size (width and height) and number of lines, by actually rendering and measuring candidates.
 
-- When an element is connected with `attach`, the controller measures it, and measures again when the element's size changes or fonts finish loading
+- When an element is connected with `attach`, the controller measures it, and measures again when the element's size changes or fonts finish loading. It does not measure again automatically when only the text formatting (`font-size`, `letter-spacing`, and so on) changes while the element's size stays the same, so call `refresh` in that case
 - The controller returns the text to display and the style to apply as a snapshot. It never rewrites the element's content or style, so apply the snapshot's `displayText` and `style` to the same element. Without the `style`, the measured formatting and the displayed formatting differ, and the result will be wrong
 - Creating a controller does not touch the DOM, so it can be created during SSR. Measuring requires the DOM
 
@@ -112,16 +112,18 @@ render();
 controller.attach(element);
 ```
 
-| Option              | Type               | Description                                                                                                                                                    |
-| ------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wrap?`             | `TextWrap`         | Wrapping: `'none'` (no wrapping), `'normal'` (wrap at normal break points), or `'anywhere'` (also break long words without break points). Defaults to `'none'` |
-| `maxLines?`         | `number`           | Maximum number of lines. `NaN` means no limit, negative values are treated as `0`, and fractions are truncated                                                 |
-| `maxChars?`         | `number`           | Maximum number of graphemes, including the ellipsis. Enforced in addition to the element's size                                                                |
-| `disabled?`         | `boolean`          | Stops the controller. While stopped, it does not measure and displays the original string. Defaults to `false`                                                 |
-| `ellipsis?`         | `string`           | Same as `truncateText`                                                                                                                                         |
-| `truncatePosition?` | `TruncatePosition` | Same as `truncateText`                                                                                                                                         |
-| `truncateBoundary?` | `TruncateBoundary` | Same as `truncateText`                                                                                                                                         |
-| `locale?`           | `string`           | Same as `truncateText`                                                                                                                                         |
+| Option              | Type               | Description                                                                                                                                                                                                                                             |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wrap?`             | `TextWrap`         | Wrapping: `'none'` (no wrapping), `'normal'` (wrap at normal break points), or `'anywhere'` (also break long words without break points). Defaults to `'none'`                                                                                          |
+| `maxLines?`         | `number`           | Maximum number of lines. `NaN` means no limit, negative values are treated as `0`, and fractions are truncated                                                                                                                                          |
+| `maxChars?`         | `number`           | Maximum number of graphemes, including the ellipsis. Enforced in addition to the element's size                                                                                                                                                         |
+| `disabled?`         | `boolean`          | Stops the controller. While stopped, it does not measure and displays the original string. Defaults to `false`                                                                                                                                          |
+| `detectionDelay?`   | `number`           | The time (ms) from detecting a change in the element's size or font loading until it is reflected in a measurement. Further detections restart the wait. `0` measures in the next frame. Defaults to `0` (see "Measuring while changes continue" below) |
+| `hideWhilePending?` | `boolean`          | Hides the text by adding `visibility: hidden` to `style` while waiting to reflect a detected change. Defaults to `false`                                                                                                                                |
+| `ellipsis?`         | `string`           | Same as `truncateText`                                                                                                                                                                                                                                  |
+| `truncatePosition?` | `TruncatePosition` | Same as `truncateText`                                                                                                                                                                                                                                  |
+| `truncateBoundary?` | `TruncateBoundary` | Same as `truncateText`                                                                                                                                                                                                                                  |
+| `locale?`           | `string`           | Same as `truncateText`                                                                                                                                                                                                                                  |
 
 With `wrap: 'none'`, each line separated by a line break is fit to the element's width.
 
@@ -142,7 +144,8 @@ Properties of `TruncateTextSnapshot`:
 | ------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `displayText` | `string`           | The text to display                                                                                                                                                             |
 | `isTruncated` | `boolean \| null`  | Whether the text was truncated. While not yet measured (no element attached, not in the DOM, `display: none`, or zero width), it is `null` and the original string is displayed |
-| `style`       | `TextFittingStyle` | The style to apply to the element (`whiteSpace`, and `overflowWrap` when `wrap` is `'anywhere'`)                                                                                |
+| `isPending`   | `boolean`          | Whether the controller is waiting to reflect a detected change (`true` during `detectionDelay`). The result in the meantime is the one measured last                            |
+| `style`       | `TextFittingStyle` | The style to apply to the element (`whiteSpace`, `overflowWrap` when `wrap` is `'anywhere'`, and `visibility` while waiting with `hideWhilePending`)                            |
 
 #### About the element's size
 
@@ -184,13 +187,15 @@ render();
 controller.attach(element);
 ```
 
-| Option         | Type       | Description                                                                                                                                                                                                               |
-| -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `minFontSize?` | `number`   | Lower limit of the font size (px). If omitted, there is no lower limit (in practice, the browser's minimum font size applies). Specify it for long text to keep it readable. `0` or less and `NaN` are treated as omitted |
-| `maxFontSize?` | `number`   | Upper limit of the font size (px). If omitted, the element's CSS font size. `Infinity` enlarges the text as much as it fits. `0` or less and `NaN` are treated as omitted                                                 |
-| `wrap?`        | `TextWrap` | Same as `createTruncateTextController`                                                                                                                                                                                    |
-| `maxLines?`    | `number`   | Same as `createTruncateTextController`                                                                                                                                                                                    |
-| `disabled?`    | `boolean`  | Stops the controller. While stopped, it does not measure and does not set a font size (the CSS size is used). Defaults to `false`                                                                                         |
+| Option              | Type       | Description                                                                                                                                                                                                                                             |
+| ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?`      | `number`   | Lower limit of the font size (px). If omitted, there is no lower limit (in practice, the browser's minimum font size applies). Specify it for long text to keep it readable. `0` or less and `NaN` are treated as omitted                               |
+| `maxFontSize?`      | `number`   | Upper limit of the font size (px). If omitted, the element's CSS font size. `Infinity` enlarges the text as much as it fits. `0` or less and `NaN` are treated as omitted                                                                               |
+| `wrap?`             | `TextWrap` | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
+| `maxLines?`         | `number`   | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
+| `disabled?`         | `boolean`  | Stops the controller. While stopped, it does not measure and does not set a font size (the CSS size is used). Defaults to `false`                                                                                                                       |
+| `detectionDelay?`   | `number`   | The time (ms) from detecting a change in the element's size or font loading until it is reflected in a measurement. Further detections restart the wait. `0` measures in the next frame. Defaults to `0` (see "Measuring while changes continue" below) |
+| `hideWhilePending?` | `boolean`  | Hides the text by adding `visibility: hidden` to `style` while waiting to reflect a detected change. Defaults to `false`                                                                                                                                |
 
 If `minFontSize` is larger than the upper limit (`maxFontSize`, or the CSS font size if omitted), the font size is fixed at `minFontSize`. The lower limit exists to keep the text readable, so it takes precedence over the upper limit.
 
@@ -200,12 +205,13 @@ The methods are the same as `TruncateTextController` (`attach`, `getSnapshot`, `
 
 Properties of `ResizeTextSnapshot`:
 
-| Property        | Type              | Description                                                                                            |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
-| `displayText`   | `string`          | The text to display (the original string as is)                                                        |
-| `fontSize`      | `number \| null`  | The selected font size (px). `null` while not yet measured and while stopped                           |
-| `isOverflowing` | `boolean \| null` | Whether the text does not fit even at the lower limit. `null` while not yet measured and while stopped |
-| `style`         | `ResizeTextStyle` | The style to apply to the element (`whiteSpace`, `overflowWrap`, and the selected `fontSize`)          |
+| Property        | Type              | Description                                                                                                                                          |
+| --------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayText`   | `string`          | The text to display (the original string as is)                                                                                                      |
+| `fontSize`      | `number \| null`  | The selected font size (px). `null` while not yet measured and while stopped                                                                         |
+| `isOverflowing` | `boolean \| null` | Whether the text does not fit even at the lower limit. `null` while not yet measured and while stopped                                               |
+| `isPending`     | `boolean`         | Whether the controller is waiting to reflect a detected change (`true` during `detectionDelay`). The result in the meantime is the one measured last |
+| `style`         | `ResizeTextStyle` | The style to apply to the element (`whiteSpace`, `overflowWrap`, and the selected `fontSize`)                                                        |
 
 #### Notes on changing the font size
 
@@ -226,7 +232,7 @@ Creates a controller that chooses, from candidates, the expression that fits the
 - Order the candidates from most to least preferred. The content of the candidates is not interpreted, so format numbers, dates, and so on yourself and pass the results
 - If no candidate fits, the last one is displayed and `isOverflowing` reports it
 - An empty array is treated as an array with one empty string
-- The options are `wrap`, `maxLines`, and `disabled` (same as `createTruncateTextController`)
+- The options are `wrap`, `maxLines`, `disabled`, `detectionDelay`, and `hideWhilePending` (same as `createTruncateTextController`)
 
 ```ts
 const controller = createChooseTextController([
@@ -242,12 +248,13 @@ The methods are the same as `TruncateTextController`. `update` takes an array of
 
 Properties of `ChooseTextSnapshot`:
 
-| Property        | Type               | Description                                                                                                  |
-| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `displayText`   | `string`           | The text to display (the chosen candidate)                                                                   |
-| `index`         | `number`           | The index of the chosen candidate. `0` while not yet measured and while stopped (the first one is displayed) |
-| `isOverflowing` | `boolean \| null`  | Whether no candidate fits. `null` while not yet measured and while stopped                                   |
-| `style`         | `TextFittingStyle` | The style to apply to the element                                                                            |
+| Property        | Type               | Description                                                                                                                                          |
+| --------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayText`   | `string`           | The text to display (the chosen candidate)                                                                                                           |
+| `index`         | `number`           | The index of the chosen candidate. `0` while not yet measured and while stopped (the first one is displayed)                                         |
+| `isOverflowing` | `boolean \| null`  | Whether no candidate fits. `null` while not yet measured and while stopped                                                                           |
+| `isPending`     | `boolean`          | Whether the controller is waiting to reflect a detected change (`true` during `detectionDelay`). The result in the meantime is the one measured last |
+| `style`         | `TextFittingStyle` | The style to apply to the element                                                                                                                    |
 
 ### `createFitTextController`
 
@@ -282,20 +289,22 @@ const controller = createFitTextController(['1,234,567', '1.2M'], {
 });
 ```
 
-| Option              | Type               | Description                                                                                                                                                               |
-| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `minFontSize?`      | `number`           | Same as `createResizeTextController`. Specifying it enables resizing                                                                                                      |
-| `maxFontSize?`      | `number`           | Same as `createResizeTextController`. Specifying it enables resizing                                                                                                      |
-| `truncate?`         | `boolean`          | Truncates as the last resort. Defaults to `false`                                                                                                                         |
-| `resizeFirst?`      | `boolean`          | Shrinks the text before switching candidates. Defaults to `false`                                                                                                         |
-| `maxChars?`         | `number`           | Maximum number of graphemes, including the ellipsis. Used only when `truncate` is `true`: candidates exceeding it are not chosen, and the last one is truncated to fit it |
-| `ellipsis?`         | `string`           | Same as `truncateText`                                                                                                                                                    |
-| `truncatePosition?` | `TruncatePosition` | Same as `truncateText`                                                                                                                                                    |
-| `truncateBoundary?` | `TruncateBoundary` | Same as `truncateText`                                                                                                                                                    |
-| `locale?`           | `string`           | Same as `truncateText`                                                                                                                                                    |
-| `wrap?`             | `TextWrap`         | Same as `createTruncateTextController`                                                                                                                                    |
-| `maxLines?`         | `number`           | Same as `createTruncateTextController`                                                                                                                                    |
-| `disabled?`         | `boolean`          | Stops the controller. While stopped, it does not measure and displays the first candidate. Defaults to `false`                                                            |
+| Option              | Type               | Description                                                                                                                                                                                                                                             |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minFontSize?`      | `number`           | Same as `createResizeTextController`. Specifying it enables resizing                                                                                                                                                                                    |
+| `maxFontSize?`      | `number`           | Same as `createResizeTextController`. Specifying it enables resizing                                                                                                                                                                                    |
+| `truncate?`         | `boolean`          | Truncates as the last resort. Defaults to `false`                                                                                                                                                                                                       |
+| `resizeFirst?`      | `boolean`          | Shrinks the text before switching candidates. Defaults to `false`                                                                                                                                                                                       |
+| `maxChars?`         | `number`           | Maximum number of graphemes, including the ellipsis. Used only when `truncate` is `true`: candidates exceeding it are not chosen, and the last one is truncated to fit it                                                                               |
+| `ellipsis?`         | `string`           | Same as `truncateText`                                                                                                                                                                                                                                  |
+| `truncatePosition?` | `TruncatePosition` | Same as `truncateText`                                                                                                                                                                                                                                  |
+| `truncateBoundary?` | `TruncateBoundary` | Same as `truncateText`                                                                                                                                                                                                                                  |
+| `locale?`           | `string`           | Same as `truncateText`                                                                                                                                                                                                                                  |
+| `wrap?`             | `TextWrap`         | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
+| `maxLines?`         | `number`           | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
+| `disabled?`         | `boolean`          | Stops the controller. While stopped, it does not measure and displays the first candidate. Defaults to `false`                                                                                                                                          |
+| `detectionDelay?`   | `number`           | The time (ms) from detecting a change in the element's size or font loading until it is reflected in a measurement. Further detections restart the wait. `0` measures in the next frame. Defaults to `0` (see "Measuring while changes continue" below) |
+| `hideWhilePending?` | `boolean`          | Hides the text by adding `visibility: hidden` to `style` while waiting to reflect a detected change. Defaults to `false`                                                                                                                                |
 
 #### `FitTextController`
 
@@ -303,16 +312,34 @@ The methods are the same as `TruncateTextController`. `update` takes a string or
 
 Properties of `FitTextSnapshot`:
 
-| Property        | Type              | Description                                                                                      |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
-| `displayText`   | `string`          | The text to display                                                                              |
-| `index`         | `number`          | The index of the chosen candidate. `0` while not yet measured and while stopped                  |
-| `fontSize`      | `number \| null`  | The selected font size (px). `null` when not resizing, while not yet measured, and while stopped |
-| `isTruncated`   | `boolean \| null` | Whether the text was truncated. `null` while not yet measured and while stopped                  |
-| `isOverflowing` | `boolean \| null` | Whether nothing fits. `null` while not yet measured and while stopped                            |
-| `style`         | `ResizeTextStyle` | The style to apply to the element (includes the selected `fontSize` when resizing)               |
+| Property        | Type              | Description                                                                                                                                          |
+| --------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayText`   | `string`          | The text to display                                                                                                                                  |
+| `index`         | `number`          | The index of the chosen candidate. `0` while not yet measured and while stopped                                                                      |
+| `fontSize`      | `number \| null`  | The selected font size (px). `null` when not resizing, while not yet measured, and while stopped                                                     |
+| `isTruncated`   | `boolean \| null` | Whether the text was truncated. `null` while not yet measured and while stopped                                                                      |
+| `isOverflowing` | `boolean \| null` | Whether nothing fits. `null` while not yet measured and while stopped                                                                                |
+| `isPending`     | `boolean`         | Whether the controller is waiting to reflect a detected change (`true` during `detectionDelay`). The result in the meantime is the one measured last |
+| `style`         | `ResizeTextStyle` | The style to apply to the element (includes the selected `fontSize` when resizing)                                                                   |
 
 The notes on resizing are the same as `createResizeTextController`.
+
+### Measuring while changes continue (`detectionDelay`, `hideWhilePending`)
+
+By default, the controller measures in the next frame after detecting a change in the element's size or font loading. While the window width is being dragged, for example, it measures every frame, and the result changes every frame. Use the following options when you render many elements or do not want to show intermediate results (shared by all four controllers).
+
+- With `detectionDelay` in milliseconds, the controller waits that long after the last detection before measuring. Detections in the meantime restart the wait, so it does not measure while the size keeps changing
+- While waiting, the snapshot's `isPending` is `true`, and the result stays as it was last measured
+- With `hideWhilePending: true`, `visibility: hidden` is added to `style` while waiting, which hides the text. The element's size does not change. To fade the text in, specify a `transition` (for example, on `opacity`) in your own styles
+- Measurements by `attach`, `update`, and `refresh` do not wait. Calling them while waiting measures on the spot and stops waiting
+- Changes detected in the few frames right after a measurement are treated as caused by rendering the controller's own result (the text or font size), and are measured in the next frame without waiting (so that the text is not hidden again right after it is shown)
+
+```ts
+const controller = createTruncateTextController(text, {
+  detectionDelay: 150,
+  hideWhilePending: true,
+});
+```
 
 ### About `Intl.Segmenter`
 
@@ -329,25 +356,25 @@ Truncating icon fonts drawn with ligatures (such as `home` in Material Icons) br
 
 ### Types
 
-| Type                            | Description                                                             |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| `TruncateTextOptions`           | Options of `truncateText`                                               |
-| `TruncateTextControllerOptions` | Options of `createTruncateTextController`                               |
-| `TruncateTextController`        | The controller returned by `createTruncateTextController`               |
-| `TruncateTextSnapshot`          | The result of `TruncateTextController`                                  |
-| `ChooseTextControllerOptions`   | Options of `createChooseTextController`                                 |
-| `ChooseTextController`          | The controller returned by `createChooseTextController`                 |
-| `ChooseTextSnapshot`            | The result of `ChooseTextController`                                    |
-| `FitTextControllerOptions`      | Options of `createFitTextController`                                    |
-| `FitTextController`             | The controller returned by `createFitTextController`                    |
-| `FitTextSnapshot`               | The result of `FitTextController`                                       |
-| `ResizeTextControllerOptions`   | Options of `createResizeTextController`                                 |
-| `ResizeTextController`          | The controller returned by `createResizeTextController`                 |
-| `ResizeTextSnapshot`            | The result of `ResizeTextController`                                    |
-| `ResizeTextStyle`               | The style returned by `ResizeTextController` to apply to the element    |
-| `TruncateOptions`               | Options shared by the truncation features                               |
-| `TextLayoutOptions`             | Options shared by the fitting features (`wrap`, `maxLines`, `disabled`) |
-| `TruncatePosition`              | Where to truncate (`'end' \| 'start' \| 'middle'`)                      |
-| `TruncateBoundary`              | The unit to cut at (`'grapheme' \| 'word'`)                             |
-| `TextWrap`                      | Wrapping (`'none' \| 'normal' \| 'anywhere'`)                           |
-| `TextFittingStyle`              | The style to apply to the element                                       |
+| Type                            | Description                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `TruncateTextOptions`           | Options of `truncateText`                                                                                     |
+| `TruncateTextControllerOptions` | Options of `createTruncateTextController`                                                                     |
+| `TruncateTextController`        | The controller returned by `createTruncateTextController`                                                     |
+| `TruncateTextSnapshot`          | The result of `TruncateTextController`                                                                        |
+| `ChooseTextControllerOptions`   | Options of `createChooseTextController`                                                                       |
+| `ChooseTextController`          | The controller returned by `createChooseTextController`                                                       |
+| `ChooseTextSnapshot`            | The result of `ChooseTextController`                                                                          |
+| `FitTextControllerOptions`      | Options of `createFitTextController`                                                                          |
+| `FitTextController`             | The controller returned by `createFitTextController`                                                          |
+| `FitTextSnapshot`               | The result of `FitTextController`                                                                             |
+| `ResizeTextControllerOptions`   | Options of `createResizeTextController`                                                                       |
+| `ResizeTextController`          | The controller returned by `createResizeTextController`                                                       |
+| `ResizeTextSnapshot`            | The result of `ResizeTextController`                                                                          |
+| `ResizeTextStyle`               | The style returned by `ResizeTextController` to apply to the element                                          |
+| `TruncateOptions`               | Options shared by the truncation features                                                                     |
+| `TextLayoutOptions`             | Options shared by the fitting features (`wrap`, `maxLines`, `disabled`, `detectionDelay`, `hideWhilePending`) |
+| `TruncatePosition`              | Where to truncate (`'end' \| 'start' \| 'middle'`)                                                            |
+| `TruncateBoundary`              | The unit to cut at (`'grapheme' \| 'word'`)                                                                   |
+| `TextWrap`                      | Wrapping (`'none' \| 'normal' \| 'anywhere'`)                                                                 |
+| `TextFittingStyle`              | The style to apply to the element                                                                             |

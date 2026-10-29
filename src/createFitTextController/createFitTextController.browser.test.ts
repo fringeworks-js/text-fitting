@@ -73,6 +73,7 @@ describe('createFitTextController', () => {
       isTruncated: null,
       isOverflowing: null,
       style: { whiteSpace: 'pre' },
+      isPending: false,
     });
   });
 

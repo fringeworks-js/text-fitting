@@ -79,6 +79,7 @@ describe('createTruncateTextController', () => {
         displayText: LONG_TEXT,
         isTruncated: null,
         style: { whiteSpace: 'pre' },
+        isPending: false,
       });
     });
 
@@ -451,6 +452,184 @@ describe('createTruncateTextController', () => {
       const controller = createTruncateTextController(LONG_TEXT);
       bind(controller, host);
       expect(document.body.children).toHaveLength(1);
+    });
+  });
+
+  describe('detectionDelay・hideWhilePending', () => {
+    const DELAY = 200;
+    const wait = (ms: number) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      });
+
+    it('大きさの変化を検知してから、detectionDelay の間は測らずに isPending を true にする', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        detectionDelay: DELAY,
+      });
+      bind(controller, host);
+      await nextFrames();
+      const narrow = controller.getSnapshot().displayText;
+      expect(controller.getSnapshot().isPending).toBe(false);
+
+      host.style.width = '300px';
+      await nextFrames();
+      expect(controller.getSnapshot().isPending).toBe(true);
+      expect(controller.getSnapshot().displayText).toBe(narrow);
+
+      await wait(DELAY + 100);
+      expect(controller.getSnapshot().isPending).toBe(false);
+      expect(controller.getSnapshot().displayText.length).toBeGreaterThan(
+        narrow.length,
+      );
+      expect(isOverflowing(host)).toBe(false);
+    });
+
+    it('続けて検知すると、最後の検知から数え直す', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        detectionDelay: DELAY,
+      });
+      bind(controller, host);
+      await nextFrames();
+
+      host.style.width = '200px';
+      await nextFrames();
+      await wait(DELAY / 2);
+      host.style.width = '300px';
+      await nextFrames();
+      await wait(DELAY / 2 + 20);
+      // 最初の検知からは DELAY を過ぎたが、最後の検知からはまだ
+      expect(controller.getSnapshot().isPending).toBe(true);
+
+      await wait(DELAY);
+      expect(controller.getSnapshot().isPending).toBe(false);
+      expect(isOverflowing(host)).toBe(false);
+    });
+
+    it('hideWhilePending では、待っている間だけ style に visibility: hidden を加える', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        detectionDelay: DELAY,
+        hideWhilePending: true,
+      });
+      bind(controller, host);
+      await nextFrames();
+      expect(controller.getSnapshot().style.visibility).toBeUndefined();
+
+      host.style.width = '300px';
+      await nextFrames();
+      const pendingStyle = controller.getSnapshot().style;
+      expect(pendingStyle).toEqual({
+        whiteSpace: 'pre',
+        visibility: 'hidden',
+      });
+
+      await wait(DELAY + 100);
+      expect(controller.getSnapshot().style).toEqual({ whiteSpace: 'pre' });
+    });
+
+    it('detectionDelay が 0 なら、hideWhilePending でも待たず、隠さない', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        hideWhilePending: true,
+      });
+      const listener = vi.fn(() => {
+        expect(controller.getSnapshot().isPending).toBe(false);
+        expect(controller.getSnapshot().style.visibility).toBeUndefined();
+      });
+      bind(controller, host);
+      await nextFrames();
+      controller.subscribe(listener);
+
+      host.style.width = '300px';
+      await nextFrames();
+
+      expect(listener).toHaveBeenCalled();
+    });
+
+    it('NaN・負の値は 0 として扱う', async () => {
+      for (const detectionDelay of [Number.NaN, -100]) {
+        const host = createHost({ width: '150px' });
+        const controller = createTruncateTextController(LONG_TEXT, {
+          detectionDelay,
+        });
+        bind(controller, host);
+        await nextFrames();
+        await nextFrames();
+        const narrow = controller.getSnapshot().displayText;
+
+        host.style.width = '300px';
+        await nextFrames();
+
+        expect(controller.getSnapshot().isPending).toBe(false);
+        expect(controller.getSnapshot().displayText).not.toBe(narrow);
+      }
+    });
+
+    it('待っている間に refresh すると、その場で測って待つのをやめる', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        detectionDelay: DELAY,
+        hideWhilePending: true,
+      });
+      bind(controller, host);
+      await nextFrames();
+
+      host.style.width = '300px';
+      await nextFrames();
+      expect(controller.getSnapshot().isPending).toBe(true);
+
+      controller.refresh();
+      expect(controller.getSnapshot().isPending).toBe(false);
+      expect(controller.getSnapshot().style.visibility).toBeUndefined();
+      expect(isOverflowing(host)).toBe(false);
+    });
+
+    it('update はその場で測り、待たない', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        detectionDelay: DELAY,
+      });
+      bind(controller, host);
+      await nextFrames();
+
+      controller.update('Hello', { detectionDelay: DELAY });
+
+      expect(controller.getSnapshot().displayText).toBe('Hello');
+      expect(controller.getSnapshot().isPending).toBe(false);
+    });
+
+    it('disabled の間は待たない', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        detectionDelay: DELAY,
+        disabled: true,
+      });
+      bind(controller, host);
+      await nextFrames();
+
+      host.style.width = '300px';
+      await nextFrames();
+
+      expect(controller.getSnapshot().isPending).toBe(false);
+    });
+
+    it('待っている間に破棄すると、後から測らない', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        detectionDelay: DELAY,
+      });
+      bind(controller, host);
+      await nextFrames();
+
+      host.style.width = '300px';
+      await nextFrames();
+      const before = controller.getSnapshot();
+      controller.destroy();
+      await wait(DELAY + 100);
+
+      expect(controller.getSnapshot()).toBe(before);
     });
   });
 

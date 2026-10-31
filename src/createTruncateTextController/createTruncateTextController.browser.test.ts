@@ -435,6 +435,21 @@ describe('createTruncateTextController', () => {
       expect(controller.getSnapshot()).toBe(before);
     });
 
+    it('値が undefined のオプションは、指定しなかったものとして扱い、測り直さない', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT);
+      bind(controller, host);
+      // 計測するときは、計測用の要素を作る
+      const createElement = vi.spyOn(document, 'createElement');
+      try {
+        controller.update(LONG_TEXT, { wrap: undefined, maxLines: undefined });
+        controller.update(LONG_TEXT, {});
+        expect(createElement).not.toHaveBeenCalled();
+      } finally {
+        createElement.mockRestore();
+      }
+    });
+
     it('要素の幅が変わると測り直す', async () => {
       const host = createHost({ width: '150px' });
       const controller = createTruncateTextController(LONG_TEXT);
@@ -630,6 +645,117 @@ describe('createTruncateTextController', () => {
       await wait(DELAY + 100);
 
       expect(controller.getSnapshot()).toBe(before);
+    });
+  });
+
+  describe('frozen', () => {
+    const wait = (ms: number) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      });
+
+    it('止めただけでは、表示を変えない', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT);
+      bind(controller, host);
+      const before = controller.getSnapshot();
+      expect(before.isTruncated).toBe(true);
+      controller.update(LONG_TEXT, { frozen: true });
+      expect(controller.getSnapshot()).toBe(before);
+    });
+
+    it('止めている間は、文字列が変わっても測らず、省略せずに表示する。判定は最後に計測したときのもの', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        frozen: true,
+      });
+      bind(controller, host);
+      const next = `${LONG_TEXT} More text.`;
+      controller.update(next, { frozen: true });
+      expect(controller.getSnapshot()).toMatchObject({
+        displayText: next,
+        isTruncated: true,
+        isPending: false,
+      });
+      expect(host.textContent).toBe(next);
+    });
+
+    it('解除すると、その場で測る', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController('Hello', {
+        frozen: true,
+      });
+      bind(controller, host);
+      controller.update(LONG_TEXT, { frozen: true });
+      controller.update(LONG_TEXT);
+      expect(controller.getSnapshot().isTruncated).toBe(true);
+      expect(isOverflowing(host)).toBe(false);
+    });
+
+    it('止めている間は、大きさが変わっても、refresh を呼んでも測らない', async () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        frozen: true,
+      });
+      bind(controller, host);
+      const before = controller.getSnapshot();
+      host.style.width = '300px';
+      await nextFrames();
+      controller.refresh();
+      expect(controller.getSnapshot()).toBe(before);
+
+      controller.update(LONG_TEXT);
+      expect(controller.getSnapshot().displayText.length).toBeGreaterThan(
+        before.displayText.length,
+      );
+    });
+
+    it('止めている間も、要素を接続したときは測る', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        frozen: true,
+      });
+      bind(controller, host);
+      expect(controller.getSnapshot().isTruncated).toBe(true);
+      expect(isOverflowing(host)).toBe(false);
+    });
+
+    it('detectionDelay で待っている間に止めると、待つのをやめる', async () => {
+      const host = createHost({ width: '150px' });
+      const options: TruncateTextControllerOptions = {
+        detectionDelay: 200,
+        hideWhilePending: true,
+      };
+      const controller = createTruncateTextController(LONG_TEXT, options);
+      bind(controller, host);
+      await nextFrames();
+      const before = controller.getSnapshot();
+
+      host.style.width = '300px';
+      await nextFrames();
+      expect(controller.getSnapshot().isPending).toBe(true);
+
+      controller.update(LONG_TEXT, { ...options, frozen: true });
+      expect(controller.getSnapshot()).toMatchObject({
+        displayText: before.displayText,
+        isPending: false,
+      });
+      expect(controller.getSnapshot().style.visibility).toBeUndefined();
+      await wait(300);
+      expect(controller.getSnapshot().displayText).toBe(before.displayText);
+    });
+
+    it('disabled が true なら、frozen は無視する', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createTruncateTextController(LONG_TEXT, {
+        frozen: true,
+        disabled: true,
+      });
+      bind(controller, host);
+      expect(controller.getSnapshot()).toMatchObject({
+        displayText: LONG_TEXT,
+        isTruncated: false,
+      });
     });
   });
 

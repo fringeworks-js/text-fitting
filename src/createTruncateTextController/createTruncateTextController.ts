@@ -1,6 +1,7 @@
 import _createControllerCore, {
   type ComputeSnapshot,
   type ContentBoxSize,
+  type FreezeSnapshot,
 } from '../_internal/_createControllerCore';
 import _createTextProbe from '../_internal/_createTextProbe';
 import _createTextStyle from '../_internal/_createTextStyle';
@@ -38,11 +39,14 @@ export default function createTruncateTextController(
   let currentOptions = options;
   let truncator = _createTruncator(text, options);
   let style = _createTextStyle(options.wrap);
+  // 最後に計測した文字列
+  let measuredText = text;
 
   const compute: ComputeSnapshot<Omit<TruncateTextSnapshot, 'isPending'>> = (
     element,
     size,
   ) => {
+    measuredText = currentText;
     if (currentOptions.disabled) {
       return { displayText: currentText, isTruncated: false, style };
     }
@@ -62,10 +66,21 @@ export default function createTruncateTextController(
     };
   };
 
+  // 計測を止めている間は、文字列が変わっていなければ最後の結果を、変わっていれば今の文字列を省略せずに表示する
+  const freeze: FreezeSnapshot<Omit<TruncateTextSnapshot, 'isPending'>> = (
+    measured,
+  ) => ({
+    ...measured,
+    displayText:
+      currentText === measuredText ? measured.displayText : currentText,
+    style,
+  });
+
   const core = _createControllerCore(
     compute,
     _isEqualSnapshot,
     () => currentOptions,
+    freeze,
   );
 
   const update = (

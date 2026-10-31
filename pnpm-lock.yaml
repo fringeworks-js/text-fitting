@@ -108,6 +108,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@fringeworks/utils':
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@fringeworks/dev':
         specifier: ^0.13.2
@@ -441,6 +445,12 @@ packages:
     resolution: {integrity: sha512-cISXRnI8ItzA/nXaGIFV4pmumTCsrUK5VCuz7UkoyZeXbg55WOL3WE5NWGTVmKsSgPDlDhFaZ7xy1li8jMGm7A==}
     peerDependencies:
       rollup: ^4.0.0
+
+  '@fringeworks/types@1.0.0':
+    resolution: {integrity: sha512-o9co16ePKE1cL/Qpail6LnTVrTC/HeIATrYBDpNcd/aef2mNEVUdhVD2X001YdkpCAXnwgEjnmSOpBqMEtI4aA==}
+
+  '@fringeworks/utils@2.0.0':
+    resolution: {integrity: sha512-iCXRAvfGLgTfiWuzsCri6EhLXKG80+mVBiGHacZi96yy1W0RQR3HQxNwcixYlo001iy5PIA5fU1fqyu5d6fxtw==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1390,6 +1400,10 @@ packages:
   keyv@5.6.0:
     resolution: {integrity: sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kA1Ufx9OYWZzg52QFBGALTirzDSw==}
 
+  klona@2.0.6:
+    resolution: {integrity: sha512-dhG34DXATL5hSxJbIexCft8FChFXtmskoZYnoPWjXQuebWYCNkVeV3KkGegCK9CP1oswI/vQibS2GY7Em/sJJA==}
+    engines: {node: '>= 8'}
+
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
@@ -2244,6 +2258,14 @@ snapshots:
       sort-package-json: 3.7.1
       type-fest: 5.10.0
 
+  '@fringeworks/types@1.0.0': {}
+
+  '@fringeworks/utils@2.0.0':
+    dependencies:
+      '@fringeworks/types': 1.0.0
+      klona: 2.0.6
+      remeda: 2.54.1
+
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -3075,6 +3097,8 @@ snapshots:
   keyv@5.6.0:
     dependencies:
       '@keyv/serialize': 1.1.1
+
+  klona@2.0.6: {}
 
   levn@0.4.1:
     dependencies:

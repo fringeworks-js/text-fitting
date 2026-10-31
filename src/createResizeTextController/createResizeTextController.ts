@@ -1,6 +1,7 @@
 import _createControllerCore, {
   type ComputeSnapshot,
   type ContentBoxSize,
+  type FreezeSnapshot,
 } from '../_internal/_createControllerCore';
 import _createTextProbe from '../_internal/_createTextProbe';
 import _createTextStyle from '../_internal/_createTextStyle';
@@ -73,10 +74,23 @@ export default function createResizeTextController(
     };
   };
 
+  // 計測を止めている間は、最後に計測した font-size で今の文字列を表示する
+  const freeze: FreezeSnapshot<Omit<ResizeTextSnapshot, 'isPending'>> = (
+    measured,
+  ) => ({
+    ...measured,
+    displayText: currentText,
+    style:
+      measured.fontSize === null
+        ? style
+        : { ...style, fontSize: `${measured.fontSize}px` },
+  });
+
   const core = _createControllerCore(
     compute,
     _isEqualSnapshot,
     () => currentOptions,
+    freeze,
   );
 
   const update = (

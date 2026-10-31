@@ -352,6 +352,30 @@ describe('createResizeTextController', () => {
     });
   });
 
+  describe('frozen', () => {
+    it('止めている間は、最後に計測した font-size で新しい文字列を表示する', () => {
+      const host = createHost({ width: '150px' });
+      const controller = createResizeTextController(LONG_TEXT, {
+        maxFontSize: 48,
+      });
+      bind(controller, host);
+      const before = controller.getSnapshot();
+      controller.update('Hi', { maxFontSize: 48, frozen: true });
+      expect(controller.getSnapshot()).toMatchObject({
+        displayText: 'Hi',
+        fontSize: before.fontSize,
+        style: { fontSize: `${before.fontSize}px` },
+        isPending: false,
+      });
+      expect(host.textContent).toBe('Hi');
+
+      controller.update('Hi', { maxFontSize: 48 });
+      expect(controller.getSnapshot().fontSize).toBeGreaterThan(
+        before.fontSize!,
+      );
+    });
+  });
+
   describe('測り直し', () => {
     it('文字列を変えると、その場で測り直す', () => {
       const host = createHost({ width: '150px' });

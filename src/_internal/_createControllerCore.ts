@@ -17,12 +17,18 @@ export type ComputeSnapshot<S> = (
 ) => S;
 
 /**
- * 検知した変化の反映に関わるオプション（Controller の今のオプションから読む）
+ * 計測を止めている間の snapshot（`isPending` を除く）を、最後に計測した結果と今の文字列・オプションから作る関数
+ */
+export type FreezeSnapshot<S> = (measured: S) => S;
+
+/**
+ * 計測のタイミングに関わるオプション（Controller の今のオプションから読む）
  */
 export type DetectionOptions = {
   detectionDelay?: number;
   hideWhilePending?: boolean;
   disabled?: boolean;
+  frozen?: boolean;
 };
 
 /**
@@ -70,12 +76,15 @@ const _toDelay = (value: number | undefined): number =>
  *   hideWhilePending が true なら style に `visibility: hidden` を加える。待っている間に attach・refresh で計測した場合は、待つのをやめる
  * - 計測した直後の数フレームに検知した変化は、自分の結果を描画したことによるものとみなし、待たずに次のフレームで計測する
  * - 止めている（disabled）間は待たない
+ * - frozen が true の間は、変化を検知しても、refresh を呼んでも計測せず、freeze で作った snapshot を表示する（待っていたら、待つのをやめる）。
+ *   attach では、新しい要素の結果が無いので計測する。disabled が true なら、frozen は無視する
  * - snapshot が変わらなければ通知しない
  * - 破棄した後の操作は何もしない
  *
  * @param compute 計測して snapshot（`isPending` を除く）を作る関数
  * @param isEqual 2つの snapshot（`isPending` を除く）が等しいかを判定する関数
  * @param getOptions Controller の今のオプションを返す関数
+ * @param freeze 計測を止めている間の snapshot（`isPending` を除く）を作る関数
  * @returns Controller に共通の仕組み
  */
 export default function _createControllerCore<
@@ -84,8 +93,11 @@ export default function _createControllerCore<
   compute: ComputeSnapshot<S>,
   isEqual: (a: S, b: S) => boolean,
   getOptions: () => DetectionOptions,
+  freeze: FreezeSnapshot<S>,
 ): ControllerCore<S & PendingSnapshot> {
   let base = compute(undefined, undefined);
+  // 最後に計測した結果（計測を止めている間の snapshot を作る元）
+  let measured = base;
   let pending = false;
   let hidden = false;
   // 隠すスタイルは、元のスタイルが変わらない間は同じオブジェクトを使う（snapshot の比較と、React の再描画を抑えるため）
@@ -188,8 +200,30 @@ export default function _createControllerCore<
       return;
     }
     lastSize = getMeasurableSize();
-    publish(compute(lastSize && element, lastSize), false);
+    measured = compute(lastSize && element, lastSize);
+    publish(measured, false);
     startSelfChangeFrames();
+  };
+
+  const isFrozen = () => {
+    const options = getOptions();
+    return !!options.frozen && !options.disabled;
+  };
+
+  /**
+   * 計測を止めているなら、計測せずに今の文字列・オプションで snapshot を作り直す。止めていなければ計測する
+   */
+  const refresh = () => {
+    if (destroyed) {
+      return;
+    }
+    if (!isFrozen()) {
+      run();
+      return;
+    }
+    cancelFrame();
+    cancelTimer();
+    publish(freeze(measured), false);
   };
 
   const schedule = () => {
@@ -206,7 +240,7 @@ export default function _createControllerCore<
    * 変化を検知したときの処理。detectionDelay に合わせて、次のフレームか、待ってから計測する
    */
   const detect = () => {
-    if (destroyed) {
+    if (destroyed || isFrozen()) {
       return;
     }
     const options = getOptions();
@@ -289,7 +323,7 @@ export default function _createControllerCore<
     attach,
     getSnapshot: () => snapshot,
     subscribe,
-    refresh: run,
+    refresh,
     destroy,
   };
 }

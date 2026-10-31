@@ -257,6 +257,37 @@ describe('createFitTextController', () => {
     expect(controller.getSnapshot()).toBe(before);
   });
 
+  describe('frozen', () => {
+    it('止めただけでは、省略した結果を変えない', () => {
+      const host = createHost({ width: '100px' });
+      const options = { minFontSize: 14, truncate: true };
+      const controller = createFitTextController(LONG_TEXT, options);
+      bind(controller, host);
+      const before = controller.getSnapshot();
+      expect(before.isTruncated).toBe(true);
+      controller.update(LONG_TEXT, { ...options, frozen: true });
+      expect(controller.getSnapshot()).toBe(before);
+    });
+
+    it('止めている間は、最後に計測した font-size で、新しい候補を省略せずに表示する', () => {
+      const host = createHost({ width: '100px' });
+      const options = { minFontSize: 14, truncate: true };
+      const controller = createFitTextController(LONG_TEXT, options);
+      bind(controller, host);
+      const before = controller.getSnapshot();
+      const next = `${LONG_TEXT} More text.`;
+      controller.update(next, { ...options, frozen: true });
+      expect(controller.getSnapshot()).toMatchObject({
+        displayText: next,
+        index: 0,
+        fontSize: before.fontSize,
+        isTruncated: true,
+        isPending: false,
+      });
+      expect(host.style.fontSize).toBe(`${before.fontSize}px`);
+    });
+  });
+
   it('計測用の要素を残さない', () => {
     const host = createHost({ width: '30px' });
     const controller = createFitTextController(NUMBERS, {

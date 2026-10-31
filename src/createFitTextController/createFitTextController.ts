@@ -1,6 +1,7 @@
 import _createControllerCore, {
   type ComputeSnapshot,
   type ContentBoxSize,
+  type FreezeSnapshot,
 } from '../_internal/_createControllerCore';
 import _createTextProbe from '../_internal/_createTextProbe';
 import _createTextStyle from '../_internal/_createTextStyle';
@@ -57,11 +58,14 @@ export default function createFitTextController(
   let style = _createTextStyle(options.wrap);
   // 要素に当てた font-size（CSS の font-size を読むときに外すため）
   let applied: string | undefined;
+  // 最後に計測した候補（候補が変わるたびに新しい配列にする）
+  let measuredCandidates = candidates;
 
   const compute: ComputeSnapshot<Omit<FitTextSnapshot, 'isPending'>> = (
     element,
     size,
   ) => {
+    measuredCandidates = candidates;
     if (currentOptions.disabled || !element || !size) {
       applied = undefined;
       return {
@@ -88,10 +92,31 @@ export default function createFitTextController(
     };
   };
 
+  // 計測を止めている間は、候補が変わっていなければ最後の結果を、変わっていれば最後に選んだのと同じ位置の候補
+  // （候補が減った場合は最後の候補）を省略せずに表示する。font-size は最後に計測したもの
+  const freeze: FreezeSnapshot<Omit<FitTextSnapshot, 'isPending'>> = (
+    measured,
+  ) => {
+    const index = Math.min(measured.index, candidates.length - 1);
+    return {
+      ...measured,
+      displayText:
+        candidates === measuredCandidates
+          ? measured.displayText
+          : candidates[index]!,
+      index,
+      style:
+        measured.fontSize === null
+          ? style
+          : { ...style, fontSize: `${measured.fontSize}px` },
+    };
+  };
+
   const core = _createControllerCore(
     compute,
     _isEqualSnapshot,
     () => currentOptions,
+    freeze,
   );
 
   const update = (
@@ -99,13 +124,14 @@ export default function createFitTextController(
     nextOptions: FitTextControllerOptions = {},
   ) => {
     const normalized = _toCandidates(nextText);
-    if (
-      _isShallowEqual(normalized, candidates) &&
-      _isShallowEqual(nextOptions, currentOptions)
-    ) {
+    const isSameCandidates = _isShallowEqual(normalized, candidates);
+    if (isSameCandidates && _isShallowEqual(nextOptions, currentOptions)) {
       return;
     }
-    candidates = normalized;
+    // 候補が同じなら配列を入れ替えない（計測を止めている間に、候補が変わったかを配列で判定するため）
+    if (!isSameCandidates) {
+      candidates = normalized;
+    }
     currentOptions = nextOptions;
     style = _createTextStyle(nextOptions.wrap);
     core.refresh();

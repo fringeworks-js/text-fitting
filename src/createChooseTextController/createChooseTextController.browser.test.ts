@@ -141,6 +141,28 @@ describe('createChooseTextController', () => {
     expect(controller.getSnapshot()).toBe(before);
   });
 
+  it('frozen の間は、最後に選んだのと同じ位置の候補を表示する', () => {
+    const host = createHost({ width: '100px' });
+    const controller = createChooseTextController(CANDIDATES);
+    bind(controller, host);
+    const { index } = controller.getSnapshot();
+    expect(index).toBeGreaterThan(0);
+
+    const next = ['A long first candidate', 'B', 'C'];
+    controller.update(next, { frozen: true });
+    expect(controller.getSnapshot()).toMatchObject({
+      displayText: next[index],
+      index,
+      isPending: false,
+    });
+
+    controller.update(['X'], { frozen: true });
+    expect(controller.getSnapshot()).toMatchObject({
+      displayText: 'X',
+      index: 0,
+    });
+  });
+
   it('disabled の間は、最初の候補を表示する', () => {
     const host = createHost({ width: '10px' });
     const controller = createChooseTextController(CANDIDATES, {

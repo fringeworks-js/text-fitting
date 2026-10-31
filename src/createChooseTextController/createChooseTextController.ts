@@ -1,5 +1,6 @@
 import _createControllerCore, {
   type ComputeSnapshot,
+  type FreezeSnapshot,
 } from '../_internal/_createControllerCore';
 import _createTextProbe from '../_internal/_createTextProbe';
 import _createTextStyle from '../_internal/_createTextStyle';
@@ -71,10 +72,24 @@ export default function createChooseTextController(
     }
   };
 
+  // 計測を止めている間は、最後に選んだのと同じ位置の候補を表示する（候補が減った場合は最後の候補）
+  const freeze: FreezeSnapshot<Omit<ChooseTextSnapshot, 'isPending'>> = (
+    measured,
+  ) => {
+    const index = Math.min(measured.index, currentCandidates.length - 1);
+    return {
+      ...measured,
+      displayText: currentCandidates[index]!,
+      index,
+      style,
+    };
+  };
+
   const core = _createControllerCore(
     compute,
     _isEqualSnapshot,
     () => currentOptions,
+    freeze,
   );
 
   const update = (

@@ -45,6 +45,7 @@ The library does not interpret the content of the string. If you want to normali
 | `createResizeTextController(text, options?)`       | Creates a controller that changes the font size to fit an element's size (width and height) and lines. Requires the DOM                       |
 | `createChooseTextController(candidates, options?)` | Creates a controller that chooses, from candidates, the expression that fits an element's size (width and height) and lines. Requires the DOM |
 | `createFitTextController(text, options?)`          | Creates a controller that fits text into an element's size and lines by combining choosing, resizing, and truncating. Requires the DOM        |
+| `extract*Options(data)`                            | Separates each controller's options from the other properties (e.g. component props)                                                          |
 
 ### `truncateText`
 
@@ -118,6 +119,7 @@ controller.attach(element);
 | `maxLines?`         | `number`           | Maximum number of lines. `NaN` means no limit, negative values are treated as `0`, and fractions are truncated                                                                                                                                          |
 | `maxChars?`         | `number`           | Maximum number of graphemes, including the ellipsis. Enforced in addition to the element's size                                                                                                                                                         |
 | `disabled?`         | `boolean`          | Stops the controller. While stopped, it does not measure and displays the original string. Defaults to `false`                                                                                                                                          |
+| `frozen?`           | `boolean`          | Freezes measurement. While frozen, the controller keeps the last measured result and displays the current string. Setting it back to `false` measures on the spot. Defaults to `false` (see "Freezing measurement" below)                               |
 | `detectionDelay?`   | `number`           | The time (ms) from detecting a change in the element's size or font loading until it is reflected in a measurement. Further detections restart the wait. `0` measures in the next frame. Defaults to `0` (see "Measuring while changes continue" below) |
 | `hideWhilePending?` | `boolean`          | Hides the text by adding `visibility: hidden` to `style` while waiting to reflect a detected change. Defaults to `false`                                                                                                                                |
 | `ellipsis?`         | `string`           | Same as `truncateText`                                                                                                                                                                                                                                  |
@@ -194,6 +196,7 @@ controller.attach(element);
 | `wrap?`             | `TextWrap` | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
 | `maxLines?`         | `number`   | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
 | `disabled?`         | `boolean`  | Stops the controller. While stopped, it does not measure and does not set a font size (the CSS size is used). Defaults to `false`                                                                                                                       |
+| `frozen?`           | `boolean`  | Freezes measurement. While frozen, the controller keeps the last measured result and displays the current string. Setting it back to `false` measures on the spot. Defaults to `false` (see "Freezing measurement" below)                               |
 | `detectionDelay?`   | `number`   | The time (ms) from detecting a change in the element's size or font loading until it is reflected in a measurement. Further detections restart the wait. `0` measures in the next frame. Defaults to `0` (see "Measuring while changes continue" below) |
 | `hideWhilePending?` | `boolean`  | Hides the text by adding `visibility: hidden` to `style` while waiting to reflect a detected change. Defaults to `false`                                                                                                                                |
 
@@ -232,7 +235,7 @@ Creates a controller that chooses, from candidates, the expression that fits the
 - Order the candidates from most to least preferred. The content of the candidates is not interpreted, so format numbers, dates, and so on yourself and pass the results
 - If no candidate fits, the last one is displayed and `isOverflowing` reports it
 - An empty array is treated as an array with one empty string
-- The options are `wrap`, `maxLines`, `disabled`, `detectionDelay`, and `hideWhilePending` (same as `createTruncateTextController`)
+- The options are `wrap`, `maxLines`, `disabled`, `frozen`, `detectionDelay`, and `hideWhilePending` (same as `createTruncateTextController`)
 
 ```ts
 const controller = createChooseTextController([
@@ -303,6 +306,7 @@ const controller = createFitTextController(['1,234,567', '1.2M'], {
 | `wrap?`             | `TextWrap`         | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
 | `maxLines?`         | `number`           | Same as `createTruncateTextController`                                                                                                                                                                                                                  |
 | `disabled?`         | `boolean`          | Stops the controller. While stopped, it does not measure and displays the first candidate. Defaults to `false`                                                                                                                                          |
+| `frozen?`           | `boolean`          | Freezes measurement. While frozen, the controller keeps the last measured result and displays the current string. Setting it back to `false` measures on the spot. Defaults to `false` (see "Freezing measurement" below)                               |
 | `detectionDelay?`   | `number`           | The time (ms) from detecting a change in the element's size or font loading until it is reflected in a measurement. Further detections restart the wait. `0` measures in the next frame. Defaults to `0` (see "Measuring while changes continue" below) |
 | `hideWhilePending?` | `boolean`          | Hides the text by adding `visibility: hidden` to `style` while waiting to reflect a detected change. Defaults to `false`                                                                                                                                |
 
@@ -324,6 +328,36 @@ Properties of `FitTextSnapshot`:
 
 The notes on resizing are the same as `createResizeTextController`.
 
+### `extract*Options`
+
+| Function                           | Description                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| `extractTruncateTextOptions(data)` | Separates `createTruncateTextController` options from the other properties |
+| `extractResizeTextOptions(data)`   | Separates `createResizeTextController` options from the other properties   |
+| `extractChooseTextOptions(data)`   | Separates `createChooseTextController` options from the other properties   |
+| `extractFitTextOptions(data)`      | Separates `createFitTextController` options from the other properties      |
+
+```ts
+extractTruncateTextOptions<D extends object>(
+  data: D,
+): [TruncateTextControllerOptions, Omit<D, keyof TruncateTextControllerOptions>]
+```
+
+Separates the controller options from the other properties (e.g. component props) and returns them as an `[options, rest]` tuple. Use it to build a component that receives properties and passes them to a controller, for example in a framework other than React. The other `extract*Options` functions have the same shape.
+
+- Properties whose value is `undefined` are also sorted by their key. Controllers treat options whose value is `undefined` as not specified (they behave the same as a missing key, and passing them to `update` does not trigger a new measurement)
+
+```ts
+import { extractTruncateTextOptions } from '@fringeworks/text-fitting';
+
+const [options, rest] = extractTruncateTextOptions({
+  maxLines: 2,
+  id: 'title',
+});
+// options: { maxLines: 2 }, rest: { id: 'title' }
+controller.update(text, options);
+```
+
 ### Measuring while changes continue (`detectionDelay`, `hideWhilePending`)
 
 By default, the controller measures in the next frame after detecting a change in the element's size or font loading. While the window width is being dragged, for example, it measures every frame, and the result changes every frame. Use the following options when you render many elements or do not want to show intermediate results (shared by all four controllers).
@@ -341,6 +375,27 @@ const controller = createTruncateTextController(text, {
 });
 ```
 
+### Freezing measurement (`frozen`)
+
+During an animation that keeps changing the string (such as counting up a number), the controller measures every time the string changes. While you know the animation is running, specify `frozen: true` to stop measuring (shared by all four controllers).
+
+- While frozen, the controller does not measure, even when the string, the options, or the element's size change. Calling `refresh` does not measure either
+- The current string is displayed, and the last measured result (the font size and the position of the chosen candidate) is kept. Features that truncate display a changed string without truncating it (overflow is left to CSS). Freezing alone does not change the display if the string has not changed
+- If the candidates decrease and the last chosen position no longer exists, the last candidate is displayed
+- `isTruncated` and `isOverflowing` are from the last measurement, and may not match the displayed string
+- Setting it back to `false` measures on the spot. Changes to the string, the options, and the element's size made while frozen are reflected at this point
+- `attach` measures even while frozen (since there is no result for that element yet)
+- Freezing while waiting for `detectionDelay` stops the wait. While frozen, `isPending` is `false`, and `hideWhilePending` does not hide the text
+- If `disabled` is `true`, `frozen` is ignored
+
+```ts
+const controller = createResizeTextController(format(0), { maxFontSize: 48 });
+
+// Freeze during the animation, and unfreeze when it ends
+controller.update(format(value), { maxFontSize: 48, frozen: true });
+controller.update(format(value), { maxFontSize: 48 });
+```
+
 ### About `Intl.Segmenter`
 
 Graphemes and words are split with `Intl.Segmenter`. In environments without `Intl.Segmenter` (Firefox before 125), simple rules are used instead.
@@ -356,25 +411,25 @@ Truncating icon fonts drawn with ligatures (such as `home` in Material Icons) br
 
 ### Types
 
-| Type                            | Description                                                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `TruncateTextOptions`           | Options of `truncateText`                                                                                     |
-| `TruncateTextControllerOptions` | Options of `createTruncateTextController`                                                                     |
-| `TruncateTextController`        | The controller returned by `createTruncateTextController`                                                     |
-| `TruncateTextSnapshot`          | The result of `TruncateTextController`                                                                        |
-| `ChooseTextControllerOptions`   | Options of `createChooseTextController`                                                                       |
-| `ChooseTextController`          | The controller returned by `createChooseTextController`                                                       |
-| `ChooseTextSnapshot`            | The result of `ChooseTextController`                                                                          |
-| `FitTextControllerOptions`      | Options of `createFitTextController`                                                                          |
-| `FitTextController`             | The controller returned by `createFitTextController`                                                          |
-| `FitTextSnapshot`               | The result of `FitTextController`                                                                             |
-| `ResizeTextControllerOptions`   | Options of `createResizeTextController`                                                                       |
-| `ResizeTextController`          | The controller returned by `createResizeTextController`                                                       |
-| `ResizeTextSnapshot`            | The result of `ResizeTextController`                                                                          |
-| `ResizeTextStyle`               | The style returned by `ResizeTextController` to apply to the element                                          |
-| `TruncateOptions`               | Options shared by the truncation features                                                                     |
-| `TextLayoutOptions`             | Options shared by the fitting features (`wrap`, `maxLines`, `disabled`, `detectionDelay`, `hideWhilePending`) |
-| `TruncatePosition`              | Where to truncate (`'end' \| 'start' \| 'middle'`)                                                            |
-| `TruncateBoundary`              | The unit to cut at (`'grapheme' \| 'word'`)                                                                   |
-| `TextWrap`                      | Wrapping (`'none' \| 'normal' \| 'anywhere'`)                                                                 |
-| `TextFittingStyle`              | The style to apply to the element                                                                             |
+| Type                            | Description                                                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `TruncateTextOptions`           | Options of `truncateText`                                                                                               |
+| `TruncateTextControllerOptions` | Options of `createTruncateTextController`                                                                               |
+| `TruncateTextController`        | The controller returned by `createTruncateTextController`                                                               |
+| `TruncateTextSnapshot`          | The result of `TruncateTextController`                                                                                  |
+| `ChooseTextControllerOptions`   | Options of `createChooseTextController`                                                                                 |
+| `ChooseTextController`          | The controller returned by `createChooseTextController`                                                                 |
+| `ChooseTextSnapshot`            | The result of `ChooseTextController`                                                                                    |
+| `FitTextControllerOptions`      | Options of `createFitTextController`                                                                                    |
+| `FitTextController`             | The controller returned by `createFitTextController`                                                                    |
+| `FitTextSnapshot`               | The result of `FitTextController`                                                                                       |
+| `ResizeTextControllerOptions`   | Options of `createResizeTextController`                                                                                 |
+| `ResizeTextController`          | The controller returned by `createResizeTextController`                                                                 |
+| `ResizeTextSnapshot`            | The result of `ResizeTextController`                                                                                    |
+| `ResizeTextStyle`               | The style returned by `ResizeTextController` to apply to the element                                                    |
+| `TruncateOptions`               | Options shared by the truncation features                                                                               |
+| `TextLayoutOptions`             | Options shared by the fitting features (`wrap`, `maxLines`, `disabled`, `frozen`, `detectionDelay`, `hideWhilePending`) |
+| `TruncatePosition`              | Where to truncate (`'end' \| 'start' \| 'middle'`)                                                                      |
+| `TruncateBoundary`              | The unit to cut at (`'grapheme' \| 'word'`)                                                                             |
+| `TextWrap`                      | Wrapping (`'none' \| 'normal' \| 'anywhere'`)                                                                           |
+| `TextFittingStyle`              | The style to apply to the element                                                                                       |

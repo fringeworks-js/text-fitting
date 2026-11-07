@@ -154,6 +154,7 @@ Properties of `TruncateTextSnapshot`:
 - The element's width must be determined by layout (a block element, a flex or grid item, and so on). Inline elements, whose width follows their content, are never truncated
 - The element's height is used as a constraint only when it is determined by CSS (`height` / `max-height`) or layout (flex, grid, and so on). For an element whose height grows with its content, only the width and `maxLines` are checked. So when wrapping (`wrap` is `'normal'` or `'anywhere'`) in an element whose height grows with its content and without `maxLines`, the text is not truncated (the element grows to show the full text)
 - To determine whether the height is fixed, the controller temporarily changes the element's font size and line height (it restores them immediately, so this is never painted)
+- As a result, a height proportional to the element's own font size (such as `height: 3em`) is treated as not fixed, because it changes along with the font size. To use the height as a constraint, specify it in `px`, `rem`, or similar units, or specify `maxLines`
 - While stopped with `disabled`, the full text may overflow if the element's height is set with CSS. Remove the height restriction as well when displaying the full text
 
 ```ts
